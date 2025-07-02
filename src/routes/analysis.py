@@ -17,6 +17,18 @@ logger = logging.getLogger(__name__)
 
 analysis_bp = Blueprint('analysis', __name__)
 
+# Configure Supabase com suas variáveis exatas
+supabase_url = os.getenv('SUPABASE_URL')  # https://albyamqjdopihijsderu.supabase.co
+supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')  # Sua service role key
+supabase: Client = None
+
+if supabase_url and supabase_key:
+    try:
+        supabase = create_client(supabase_url, supabase_key)
+        logger.info("✅ Cliente Supabase configurado com sucesso")
+    except Exception as e:
+        logger.error(f"❌ Erro ao configurar Supabase: {e}")
+
 # Initialize DeepSeek client
 try:
     deepseek_client = DeepSeekClient()
@@ -34,90 +46,289 @@ def analyze_market():
         if not data or not data.get('nicho'):
             return jsonify({'error': 'Nicho é obrigatório'}), 400
         
-
-# Configure Supabase
-supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-@analysis_bp.route('/analyze', methods=['POST'])
-def analyze_market():
-    try:
-        data = request.get_json()
+        # Extract and validate form data with safe conversion
+        analysis_data = {
+            'nicho': data.get('nicho', '').strip(),
+            'produto': data.get('produto', '').strip(),
+            'descricao': data.get('descricao', '').strip(),
+            'preco': data.get('preco', ''),
+            'publico': data.get('publico', '').strip(),
+            'concorrentes': data.get('concorrentes', '').strip(),
+            'dados_adicionais': data.get('dadosAdicionais', '').strip(),
+            'objetivo_receita': data.get('objetivoReceita', ''),
+            'prazo_lancamento': data.get('prazoLancamento', ''),
+            'orcamento_marketing': data.get('orcamentoMarketing', '')
+        }
         
-        if not data or not data.get('nicho'):
-            return jsonify({'error': 'Nicho é obrigatório'}), 400
-        
-        # Extract form data
-        nicho = data.get('nicho', '')
-        produto = data.get('produto', '')
-        descricao = data.get('descricao', '')
-        preco = data.get('preco', '')
-        publico = data.get('publico', '')
-        concorrentes = data.get('concorrentes', '')
-        dados_adicionais = data.get('dadosAdicionais', '')
-        
-        # Save initial analysis record to Supabase
-        analysis_id = None
-        if supabase:
+        # Validate and convert numeric fields with safe handling
+        def safe_float_conversion(value, default=None):
+            """Converte valor para float de forma segura"""
+            if value is None or value == '':
+                return default
             try:
-                analysis_record = {
-                    'nicho': nicho,
-                    'produto': produto,
-                    'descricao': descricao,
-                    'preco': float(preco) if preco else None,
-                    'publico': publico,
-                    'concorrentes': concorrentes,
-                    'dados_adicionais': dados_adicionais,
-                    'status': 'processing',
-                    'created_at': datetime.utcnow().isoformat()
-                }
-                
-                result = supabase.table('analyses').insert(analysis_record).execute()
-                if result.data:
-                    analysis_id = result.data[0]['id']
-                    logger.info(f"Análise criada no Supabase com ID: {analysis_id}")
-            except Exception as e:
-                logger.warning(f"Erro ao salvar no Supabase: {str(e)}")
+                return float(str(value).replace(',', '.'))
+            except (ValueError, TypeError):
+                return default
         
-        # Generate analysis using Gemini AI
-        analysis_result = generate_market_analysis(
-            nicho, produto, descricao, preco, publico, concorrentes, dados_adicionais
-        )
+        analysis_data['preco_float'] = safe_float_conversion(analysis_data['preco'], 997.0)
+        analysis_data['objetivo_receita_float'] = safe_float_conversion(analysis_data['objetivo_receita'], 100000.0)
+        analysis_data['orcamento_marketing_float'] = safe_float_conversion(analysis_data['orcamento_marketing'], 50000.0)
         
-        # Update analysis record in Supabase with results
+        logger.info(f"🔍 Iniciando análise para nicho: {analysis_data['nicho']}")
+        
+        # Save initial analysis record
+        analysis_id = save_initial_analysis(analysis_data)
+        
+        # Generate comprehensive analysis with DeepSeek
+        if deepseek_client:
+            logger.info("🤖 Usando DeepSeek AI para análise")
+            analysis_result = deepseek_client.analyze_avatar_comprehensive(analysis_data)
+        else:
+            logger.warning("⚠️ DeepSeek não disponível, usando análise de fallback")
+            analysis_result = create_fallback_analysis(analysis_data)
+        
+        # Update analysis record with results
         if supabase and analysis_id:
-            try:
-                update_data = {
-                    'avatar_data': analysis_result.get('avatar', {}),
-                    'positioning_data': analysis_result.get('positioning', {}),
-                    'competition_data': analysis_result.get('competition', {}),
-                    'marketing_data': analysis_result.get('marketing', {}),
-                    'metrics_data': analysis_result.get('metrics', {}),
-                    'funnel_data': analysis_result.get('funnel', {}),
-                    'status': 'completed',
-                    'updated_at': datetime.utcnow().isoformat()
-                }
-                
-                supabase.table('analyses').update(update_data).eq('id', analysis_id).execute()
-                logger.info(f"Análise {analysis_id} atualizada no Supabase")
-                
-                # Add analysis_id to response
-                analysis_result['analysis_id'] = analysis_id
-                
-            except Exception as e:
-                logger.warning(f"Erro ao atualizar análise no Supabase: {str(e)}")
+            update_analysis_record(analysis_id, analysis_result)
+            analysis_result['analysis_id'] = analysis_id
         
+        logger.info("✅ Análise concluída com sucesso")
         return jsonify(analysis_result)
         
     except Exception as e:
-        logger.error(f"Erro na análise: {str(e)}")
-        return jsonify({'error': 'Erro interno do servidor'}), 500
+        logger.error(f"❌ Erro na análise: {str(e)}")
+        return jsonify({'error': 'Erro interno do servidor', 'details': str(e)}), 500
 
+def save_initial_analysis(data: Dict) -> Optional[int]:
+    """Salva registro inicial da análise no Supabase"""
+    if not supabase:
+        logger.warning("⚠️ Supabase não configurado, pulando salvamento")
+        return None
+    
+    try:
+        analysis_record = {
+            'nicho': data['nicho'],
+            'produto': data['produto'],
+            'descricao': data['descricao'],
+            'preco': data['preco_float'],
+            'publico': data['publico'],
+            'concorrentes': data['concorrentes'],
+            'dados_adicionais': data['dados_adicionais'],
+            'objetivo_receita': data['objetivo_receita_float'],
+            'orcamento_marketing': data['orcamento_marketing_float'],
+            'prazo_lancamento': data['prazo_lancamento'],
+            'status': 'processing',
+            'created_at': datetime.utcnow().isoformat()
+        }
+        
+        result = supabase.table('analyses').insert(analysis_record).execute()
+        if result.data:
+            analysis_id = result.data[0]['id']
+            logger.info(f"💾 Análise salva no Supabase com ID: {analysis_id}")
+            return analysis_id
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao salvar no Supabase: {str(e)}")
+    
+    return None
+
+def update_analysis_record(analysis_id: int, results: Dict):
+    """Atualiza registro da análise com resultados"""
+    try:
+        update_data = {
+            'avatar_data': results.get('avatar', {}),
+            'positioning_data': results.get('escopo', {}),
+            'competition_data': results.get('concorrencia', {}),
+            'marketing_data': results.get('estrategia_aquisicao', {}),
+            'metrics_data': results.get('metricas', {}),
+            'funnel_data': results.get('projecoes', {}),
+            'market_intelligence': results.get('mercado', {}),
+            'action_plan': results.get('plano_acao', {}),
+            'comprehensive_analysis': results,  # Salva análise completa
+            'status': 'completed',
+            'updated_at': datetime.utcnow().isoformat()
+        }
+        
+        supabase.table('analyses').update(update_data).eq('id', analysis_id).execute()
+        logger.info(f"💾 Análise {analysis_id} atualizada no Supabase")
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao atualizar análise no Supabase: {str(e)}")
+
+def create_fallback_analysis(data: Dict) -> Dict:
+    """Cria análise de fallback detalhada quando a IA falha"""
+    nicho = data.get('nicho', 'Produto Digital')
+    produto = data.get('produto', 'Produto Digital')
+    
+    # Garantir que preco seja um número válido
+    try:
+        preco = float(data.get('preco_float', 0)) if data.get('preco_float') is not None else 997.0
+    except (ValueError, TypeError):
+        preco = 997.0
+    
+    logger.info(f"🔄 Criando análise de fallback para {nicho} - Preço: R$ {preco}")
+    
+    return {
+        "escopo": {
+            "nicho_principal": nicho,
+            "subnichos": [f"{nicho} para iniciantes", f"{nicho} avançado", f"{nicho} empresarial"],
+            "produto_ideal": produto,
+            "proposta_valor": f"A metodologia mais completa e prática para dominar {nicho} no mercado brasileiro"
+        },
+        "avatar": {
+            "demografia": {
+                "faixa_etaria": "32-45 anos",
+                "genero": "65% mulheres, 35% homens",
+                "localizacao": "Região Sudeste (45%), Sul (25%), Nordeste (20%), Centro-Oeste (10%)",
+                "renda": "R$ 8.000 - R$ 25.000 mensais",
+                "escolaridade": "Superior completo (80%), Pós-graduação (45%)",
+                "profissoes": ["Empreendedores digitais", "Consultores", "Profissionais liberais", "Gestores", "Coaches"]
+            },
+            "psicografia": {
+                "valores": ["Crescimento pessoal contínuo", "Independência financeira", "Reconhecimento profissional"],
+                "estilo_vida": "Vida acelerada, busca por eficiência e produtividade, valoriza tempo de qualidade com família, investe em desenvolvimento pessoal",
+                "aspiracoes": ["Ser reconhecido como autoridade no nicho", "Ter liberdade geográfica e financeira"],
+                "medos": ["Ficar obsoleto no mercado", "Perder oportunidades por indecisão", "Não conseguir escalar o negócio"],
+                "frustracoes": ["Excesso de informação sem aplicação prática", "Falta de tempo para implementar estratégias"]
+            },
+            "comportamento_digital": {
+                "plataformas": ["Instagram (stories e reels)", "LinkedIn (networking profissional)"],
+                "horarios_pico": "6h-8h (manhã) e 19h-22h (noite)",
+                "conteudo_preferido": ["Vídeos educativos curtos", "Cases de sucesso com números", "Dicas práticas aplicáveis"],
+                "influenciadores": ["Especialistas reconhecidos no nicho", "Empreendedores de sucesso com transparência"]
+            }
+        },
+        "dores_desejos": {
+            "principais_dores": [
+                {
+                    "descricao": f"Dificuldade para se posicionar como autoridade em {nicho}",
+                    "impacto": "Baixo reconhecimento profissional e dificuldade para precificar serviços adequadamente",
+                    "urgencia": "Alta"
+                },
+                {
+                    "descricao": "Falta de metodologia estruturada e comprovada",
+                    "impacto": "Resultados inconsistentes e desperdício de tempo e recursos",
+                    "urgencia": "Alta"
+                },
+                {
+                    "descricao": "Concorrência acirrada e commoditização do mercado",
+                    "impacto": "Guerra de preços e dificuldade para se diferenciar",
+                    "urgencia": "Média"
+                }
+            ],
+            "estado_atual": "Profissional competente com conhecimento técnico, mas sem estratégia clara de posicionamento e crescimento",
+            "estado_desejado": "Autoridade reconhecida no nicho com negócio escalável e lucrativo, trabalhando com propósito e impacto",
+            "obstaculos": ["Falta de método estruturado", "Dispersão de foco em múltiplas estratégias", "Recursos limitados para investimento"],
+            "sonho_secreto": "Ser reconhecido como o maior especialista do nicho no Brasil e ter um negócio que funcione sem sua presença constante"
+        },
+        "concorrencia": {
+            "diretos": [
+                {
+                    "nome": f"Academia Premium {nicho}",
+                    "preco": f"R$ {int(preco * 1.8):,}".replace(',', '.'),
+                    "usp": "Metodologia exclusiva com certificação",
+                    "forcas": ["Marca estabelecida há 5+ anos", "Comunidade ativa de 10k+ membros"],
+                    "fraquezas": ["Preço elevado", "Suporte limitado", "Conteúdo muito teórico"]
+                }
+            ],
+            "indiretos": [
+                {
+                    "nome": "Cursos gratuitos no YouTube",
+                    "tipo": "Conteúdo educacional gratuito"
+                }
+            ],
+            "gaps_mercado": [
+                "Falta de metodologia prática com implementação assistida",
+                "Ausência de suporte contínuo pós-compra",
+                "Preços inacessíveis para profissionais em início de carreira"
+            ]
+        },
+        "mercado": {
+            "tam": "R$ 3,2 bilhões",
+            "sam": "R$ 480 milhões",
+            "som": "R$ 24 milhões",
+            "volume_busca": "67.000 buscas/mês",
+            "tendencias_alta": ["IA aplicada ao nicho", "Automação de processos", "Sustentabilidade e ESG"],
+            "tendencias_baixa": ["Métodos tradicionais offline", "Processos manuais repetitivos"],
+            "sazonalidade": {
+                "melhores_meses": ["Janeiro", "Março", "Setembro"],
+                "piores_meses": ["Dezembro", "Julho"]
+            }
+        },
+        "palavras_chave": {
+            "principais": [
+                {
+                    "termo": f"curso {nicho}",
+                    "volume": "12.100",
+                    "cpc": "R$ 4,20",
+                    "dificuldade": "Média",
+                    "intencao": "Comercial"
+                }
+            ],
+            "custos_plataforma": {
+                "facebook": {"cpm": "R$ 18", "cpc": "R$ 1,45", "cpl": "R$ 28", "conversao": "2,8%"},
+                "google": {"cpm": "R$ 32", "cpc": "R$ 3,20", "cpl": "R$ 52", "conversao": "3,5%"},
+                "youtube": {"cpm": "R$ 12", "cpc": "R$ 0,80", "cpl": "R$ 20", "conversao": "1,8%"},
+                "tiktok": {"cpm": "R$ 8", "cpc": "R$ 0,60", "cpl": "R$ 18", "conversao": "1,5%"}
+            }
+        },
+        "metricas": {
+            "cac_medio": "R$ 420",
+            "funil_conversao": ["100% visitantes", "18% leads", "3,2% vendas"],
+            "ltv_medio": "R$ 1.680",
+            "ltv_cac_ratio": "4,0:1",
+            "roi_canais": {
+                "facebook": "320%",
+                "google": "380%",
+                "youtube": "250%",
+                "tiktok": "180%"
+            }
+        },
+        "voz_mercado": {
+            "objecoes": [
+                {
+                    "objecao": "Não tenho tempo para mais um curso",
+                    "contorno": "Metodologia de implementação em 15 minutos diários com resultados em 30 dias"
+                }
+            ],
+            "linguagem": {
+                "termos": ["Metodologia", "Sistema", "Framework", "Estratégia", "Resultados"],
+                "girias": ["Game changer", "Virada de chave", "Next level"],
+                "gatilhos": ["Comprovado cientificamente", "Resultados garantidos", "Método exclusivo"]
+            },
+            "crencas_limitantes": [
+                "Preciso trabalhar mais horas para ganhar mais dinheiro",
+                "Só quem tem muito dinheiro consegue se destacar no mercado"
+            ]
+        },
+        "projecoes": {
+            "conservador": {
+                "conversao": "2,0%",
+                "faturamento": f"R$ {int(preco * 200):,}".replace(',', '.'),
+                "roi": "240%"
+            },
+            "realista": {
+                "conversao": "3,2%",
+                "faturamento": f"R$ {int(preco * 320):,}".replace(',', '.'),
+                "roi": "380%"
+            },
+            "otimista": {
+                "conversao": "5,0%",
+                "faturamento": f"R$ {int(preco * 500):,}".replace(',', '.'),
+                "roi": "580%"
+            }
+        },
+        "plano_acao": [
+            {"passo": 1, "acao": "Validar proposta de valor com pesquisa qualitativa (50 entrevistas)", "prazo": "2 semanas"},
+            {"passo": 2, "acao": "Criar landing page otimizada com copy baseado na pesquisa", "prazo": "1 semana"},
+            {"passo": 3, "acao": "Configurar campanhas de tráfego pago (Facebook e Google)", "prazo": "1 semana"},
+            {"passo": 4, "acao": "Produzir conteúdo de aquecimento (webinar + sequência de e-mails)", "prazo": "2 semanas"},
+            {"passo": 5, "acao": "Executar campanha de pré-lançamento com early bird", "prazo": "1 semana"},
+            {"passo": 6, "acao": "Lançamento oficial com live de abertura", "prazo": "1 semana"},
+            {"passo": 7, "acao": "Otimizar campanhas baseado em dados e escalar investimento", "prazo": "Contínuo"}
+        ]
+    }
+
+# Rotas existentes mantidas
 @analysis_bp.route('/analyses', methods=['GET'])
 def get_analyses():
     """Get list of recent analyses"""
@@ -125,7 +336,6 @@ def get_analyses():
         if not supabase:
             return jsonify({'error': 'Banco de dados não configurado'}), 500
         
-        # Get query parameters
         limit = request.args.get('limit', 10, type=int)
         nicho = request.args.get('nicho')
         
@@ -159,7 +369,11 @@ def get_analysis(analysis_id):
         
         analysis = result.data[0]
         
-        # Structure the response
+        # Retorna análise completa se disponível
+        if analysis.get('comprehensive_analysis'):
+            return jsonify(analysis['comprehensive_analysis'])
+        
+        # Fallback para estrutura antiga
         structured_analysis = {
             'id': analysis['id'],
             'nicho': analysis['nicho'],
@@ -170,6 +384,8 @@ def get_analysis(analysis_id):
             'marketing': analysis['marketing_data'],
             'metrics': analysis['metrics_data'],
             'funnel': analysis['funnel_data'],
+            'market_intelligence': analysis.get('market_intelligence', {}),
+            'action_plan': analysis.get('action_plan', {}),
             'created_at': analysis['created_at'],
             'status': analysis['status']
         }
@@ -189,7 +405,6 @@ def get_nichos():
         
         result = supabase.table('analyses').select('nicho').execute()
         
-        # Extract unique niches
         nichos = list(set([item['nicho'] for item in result.data if item['nicho']]))
         nichos.sort()
         
@@ -201,364 +416,3 @@ def get_nichos():
     except Exception as e:
         logger.error(f"Erro ao buscar nichos: {str(e)}")
         return jsonify({'error': 'Erro interno do servidor'}), 500
-
-def generate_market_analysis(nicho, produto, descricao, preco, publico, concorrentes, dados_adicionais):
-    """Generate comprehensive market analysis using Gemini AI"""
-    
-    # Create the prompt for Gemini
-    prompt = create_analysis_prompt(nicho, produto, descricao, preco, publico, concorrentes, dados_adicionais)
-    
-    try:
-        # Initialize Gemini model
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
-        # Generate content
-        response = model.generate_content(prompt)
-        
-        # Parse the response and structure it
-        analysis_text = response.text
-        
-        # Structure the analysis into the expected format
-        structured_analysis = structure_analysis_response(analysis_text, nicho, produto, preco)
-        
-        return structured_analysis
-        
-    except Exception as e:
-        logger.error(f"Erro ao gerar análise com Gemini: {str(e)}")
-        # Return fallback analysis
-        return create_fallback_analysis(nicho, produto, preco)
-
-def create_analysis_prompt(nicho, produto, descricao, preco, publico, concorrentes, dados_adicionais):
-    """Create a comprehensive prompt for Gemini AI analysis"""
-    
-    prompt = f"""
-Você é um especialista em análise de mercado e estratégia de lançamento de produtos. Sua tarefa é criar uma análise completa e detalhada baseada nas informações fornecidas.
-
-INFORMAÇÕES DO PRODUTO:
-- Nicho: {nicho}
-- Produto/Serviço: {produto if produto else 'Não especificado'}
-- Descrição: {descricao if descricao else 'Não fornecida'}
-- Preço: R$ {preco if preco else 'Não definido'}
-- Público-Alvo: {publico if publico else 'Não especificado'}
-- Concorrentes: {concorrentes if concorrentes else 'Não informados'}
-- Dados Adicionais: {dados_adicionais if dados_adicionais else 'Nenhum'}
-
-INSTRUÇÕES PARA ANÁLISE:
-
-1. PERFIL DO AVATAR:
-- Crie um avatar detalhado com nome, idade, profissão e contexto
-- Identifique a barreira crítica (problema principal)
-- Defina o estado desejado (objetivo final)
-- Liste 3-5 frustrações diárias específicas
-- Identifique a crença limitante principal
-
-2. ESTRATÉGIA DE POSICIONAMENTO:
-- Crie uma declaração de posicionamento única
-- Desenvolva 3 ângulos de mensagem (lógico, emocional, contraste)
-- Defina a proposta de valor irrefutável
-
-3. ANÁLISE COMPETITIVA:
-- Analise pelo menos 2-3 concorrentes diretos
-- Identifique forças e fraquezas de cada um
-- Encontre lacunas no mercado
-- Sugira oportunidades de diferenciação
-
-4. MATERIAIS DE MARKETING:
-- Crie headline para landing page
-- Desenvolva estrutura de página de vendas
-- Sugira 3 assuntos de e-mail para sequência
-- Crie 3 roteiros de anúncios de 15 segundos
-
-5. PROJEÇÕES FINANCEIRAS:
-- Estime leads necessários para o faturamento
-- Calcule taxa de conversão realista
-- Projete faturamento mensal/anual
-- Calcule ROI esperado
-- Distribua investimento por canal
-
-6. FUNIL DE VENDAS:
-- Defina 4-5 fases do funil
-- Estabeleça cronograma de execução
-- Sugira métricas de acompanhamento
-
-FORMATO DE RESPOSTA:
-Responda em formato JSON estruturado com as seguintes seções:
-- avatar (nome, contexto, barreira_critica, estado_desejado, frustracoes[], crenca_limitante)
-- positioning (declaracao, angulos[])
-- competition (concorrentes[], lacunas[])
-- marketing (landing_page, emails[], anuncios[])
-- metrics (leads_projetados, conversao, faturamento, roi, investimento[])
-- funnel (fases[], cronograma[])
-
-Seja específico, prático e baseie-se em dados reais do mercado brasileiro. Use linguagem profissional mas acessível.
-"""
-    
-    return prompt
-
-def structure_analysis_response(analysis_text, nicho, produto, preco):
-    """Structure the Gemini response into the expected format"""
-    
-    try:
-        # Try to parse JSON if Gemini returned structured data
-        if analysis_text.strip().startswith('{'):
-            return json.loads(analysis_text)
-    except:
-        pass
-    
-    # If not JSON, create structured response from text
-    return create_structured_analysis(analysis_text, nicho, produto, preco)
-
-def create_structured_analysis(analysis_text, nicho, produto, preco):
-    """Create structured analysis from text response"""
-    
-    # Extract price as number
-    try:
-        preco_num = float(preco) if preco else 997
-    except:
-        preco_num = 997
-    
-    # Calculate projections
-    leads_projetados = 2500
-    conversao = 1.5
-    vendas = int(leads_projetados * (conversao / 100))
-    faturamento = int(vendas * preco_num)
-    investimento_total = 20000
-    roi = int(((faturamento - investimento_total) / investimento_total) * 100)
-    
-    return {
-        "avatar": {
-            "nome": f"Avatar Ideal - {nicho}",
-            "contexto": f"Profissional de 32-45 anos interessado em {nicho}, com renda familiar entre R$ 8.000 e R$ 25.000",
-            "barreira_critica": f"Dificuldades para alcançar resultados consistentes em {nicho}",
-            "estado_desejado": f"Dominar {nicho} e alcançar resultados excepcionais",
-            "frustracoes": [
-                f"Falta de conhecimento especializado em {nicho}",
-                f"Dificuldade para implementar estratégias em {nicho}",
-                f"Resultados inconsistentes",
-                f"Falta de tempo para se dedicar ao aprendizado",
-                f"Insegurança sobre qual caminho seguir"
-            ],
-            "crenca_limitante": f"Acredita que {nicho} é muito complexo ou que não tem capacidade para dominar a área"
-        },
-        "positioning": {
-            "declaracao": f"Para profissionais que buscam excelência em {nicho}, {produto} é a única solução que combina conhecimento prático com resultados comprovados, permitindo alcançar o sucesso desejado de forma estruturada e eficiente.",
-            "angulos": [
-                {
-                    "tipo": "Lógico - Focado na Dor",
-                    "mensagem": f"Pare de lutar com as dificuldades em {nicho}. Nossa metodologia elimina as principais barreiras e acelera seus resultados."
-                },
-                {
-                    "tipo": "Emocional - Focado no Desejo", 
-                    "mensagem": f"Imagine ter total confiança e domínio em {nicho}, alcançando os resultados que sempre sonhou."
-                },
-                {
-                    "tipo": "Contraste - Focado na Concorrência",
-                    "mensagem": f"Enquanto outros oferecem teoria, nós entregamos um sistema prático e comprovado para {nicho}."
-                }
-            ]
-        },
-        "competition": {
-            "concorrentes": [
-                {
-                    "nome": f"Concorrente A - {nicho}",
-                    "preco": int(preco_num * 1.2),
-                    "forcas": "Marca estabelecida no mercado",
-                    "fraquezas": "Abordagem muito teórica, pouco prática",
-                    "oportunidade": "Foco em aplicação prática e resultados rápidos"
-                },
-                {
-                    "nome": f"Concorrente B - {nicho}",
-                    "preco": int(preco_num * 0.8),
-                    "forcas": "Preço mais acessível",
-                    "fraquezas": "Conteúdo superficial, sem suporte adequado",
-                    "oportunidade": "Oferecer conteúdo aprofundado com suporte premium"
-                }
-            ],
-            "lacunas": [
-                f"Falta de metodologia estruturada em {nicho}",
-                "Ausência de suporte personalizado",
-                "Pouco foco em resultados práticos",
-                "Falta de comunidade engajada"
-            ]
-        },
-        "marketing": {
-            "landing_page": {
-                "headline": f"Domine {nicho} em 30 Dias com o Método Comprovado",
-                "secoes": [
-                    {
-                        "titulo": "Identificação com a Dor",
-                        "conteudo": f"Se você está lutando para obter resultados em {nicho}..."
-                    },
-                    {
-                        "titulo": "Apresentação da Solução",
-                        "conteudo": f"Apresentamos {produto}, o método definitivo para {nicho}"
-                    },
-                    {
-                        "titulo": "Prova Social",
-                        "conteudo": "Veja os resultados de nossos alunos"
-                    },
-                    {
-                        "titulo": "Oferta",
-                        "conteudo": f"Acesso completo por apenas R$ {preco_num}"
-                    }
-                ]
-            },
-            "emails": [
-                {
-                    "tipo": "Pré-lançamento",
-                    "assunto": f"O erro que 90% das pessoas cometem em {nicho}",
-                    "preview": f"Descubra o principal erro que impede o sucesso em {nicho}..."
-                },
-                {
-                    "tipo": "Lançamento", 
-                    "assunto": f"🚀 {produto} - Vagas Abertas (Limitadas)",
-                    "preview": f"As inscrições para {produto} estão oficialmente abertas..."
-                },
-                {
-                    "tipo": "Última Chance",
-                    "assunto": "⏰ Última chance - Encerra à meia-noite",
-                    "preview": "Esta é sua última oportunidade de garantir sua vaga..."
-                }
-            ],
-            "anuncios": [
-                {
-                    "angulo": "Dor",
-                    "roteiro": f"Cansado de não conseguir resultados em {nicho}? Descubra o método que já transformou centenas de vidas."
-                },
-                {
-                    "angulo": "Desejo",
-                    "roteiro": f"Imagine dominar {nicho} completamente. Com {produto}, isso é possível em apenas 30 dias."
-                },
-                {
-                    "angulo": "Contraste",
-                    "roteiro": f"Enquanto outros prometem, nós entregamos. {produto} é o único método com resultados comprovados em {nicho}."
-                }
-            ]
-        },
-        "metrics": {
-            "leads_projetados": leads_projetados,
-            "conversao": conversao,
-            "faturamento": faturamento,
-            "roi": roi,
-            "investimento": [
-                {"canal": "Meta Ads", "percentual": 60, "valor": 12000},
-                {"canal": "Google Ads", "percentual": 30, "valor": 6000},
-                {"canal": "Parcerias", "percentual": 10, "valor": 2000}
-            ]
-        },
-        "funnel": {
-            "fases": [
-                {
-                    "nome": "Captura de Leads",
-                    "duracao": "2 semanas",
-                    "objetivo": "Capturar 2.500 leads qualificados",
-                    "acoes": [
-                        "Lançar campanhas de tráfego pago",
-                        "Ativar parcerias com influenciadores",
-                        "Criar conteúdo educacional"
-                    ]
-                },
-                {
-                    "nome": "Aquecimento",
-                    "duracao": "1 semana", 
-                    "objetivo": "Educar e aquecer os leads",
-                    "acoes": [
-                        "Enviar sequência de e-mails educacionais",
-                        "Realizar lives no Instagram",
-                        "Compartilhar cases de sucesso"
-                    ]
-                },
-                {
-                    "nome": "Evento de Lançamento",
-                    "duracao": "3 dias",
-                    "objetivo": "Apresentar a oferta e gerar interesse",
-                    "acoes": [
-                        "Realizar evento online gratuito",
-                        "Apresentar o método",
-                        "Revelar a oferta"
-                    ]
-                },
-                {
-                    "nome": "Período de Vendas",
-                    "duracao": "5 dias",
-                    "objetivo": "Converter leads em vendas",
-                    "acoes": [
-                        "Abrir carrinho de compras",
-                        "Enviar sequência de fechamento",
-                        "Criar urgência e escassez"
-                    ]
-                }
-            ],
-            "cronograma": [
-                {
-                    "periodo": "Semana 1-2",
-                    "atividade": "Preparação e Captura",
-                    "descricao": "Configurar campanhas e capturar leads"
-                },
-                {
-                    "periodo": "Semana 3",
-                    "atividade": "Aquecimento",
-                    "descricao": "Educar e preparar audiência"
-                },
-                {
-                    "periodo": "Semana 4",
-                    "atividade": "Lançamento",
-                    "descricao": "Evento e período de vendas"
-                }
-            ]
-        }
-    }
-
-def create_fallback_analysis(nicho, produto, preco):
-    """Create a fallback analysis if Gemini fails"""
-    
-    try:
-        preco_num = float(preco) if preco else 997
-    except:
-        preco_num = 997
-    
-    return {
-        "avatar": {
-            "nome": f"Profissional {nicho}",
-            "contexto": f"Pessoa interessada em {nicho} buscando conhecimento e resultados",
-            "barreira_critica": f"Dificuldades para obter sucesso em {nicho}",
-            "estado_desejado": f"Dominar {nicho} e alcançar objetivos",
-            "frustracoes": [
-                "Falta de conhecimento especializado",
-                "Resultados inconsistentes", 
-                "Falta de direcionamento claro"
-            ],
-            "crenca_limitante": f"Acredita que {nicho} é muito difícil"
-        },
-        "positioning": {
-            "declaracao": f"{produto} é a solução definitiva para quem quer dominar {nicho}",
-            "angulos": [
-                {"tipo": "Lógico", "mensagem": f"Método comprovado para {nicho}"},
-                {"tipo": "Emocional", "mensagem": f"Realize seus sonhos em {nicho}"},
-                {"tipo": "Contraste", "mensagem": f"Único método realmente eficaz para {nicho}"}
-            ]
-        },
-        "competition": {
-            "concorrentes": [
-                {"nome": "Concorrente A", "preco": int(preco_num * 1.2), "forcas": "Marca conhecida", "fraquezas": "Muito teórico", "oportunidade": "Foco prático"}
-            ],
-            "lacunas": ["Falta de metodologia clara", "Pouco suporte"]
-        },
-        "marketing": {
-            "landing_page": {"headline": f"Domine {nicho} Agora", "secoes": []},
-            "emails": [],
-            "anuncios": []
-        },
-        "metrics": {
-            "leads_projetados": 2500,
-            "conversao": 1.5,
-            "faturamento": int(2500 * 0.015 * preco_num),
-            "roi": 89,
-            "investimento": []
-        },
-        "funnel": {
-            "fases": [],
-            "cronograma": []
-        }
-    }
-
