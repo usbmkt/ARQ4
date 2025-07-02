@@ -14,14 +14,17 @@ from functools import lru_cache
 
 analysis_bp = Blueprint('analysis', __name__)
 
-# Configure Gemini AI
+# Initialize DeepSeek client
+deepseek_client = None
 try:
-    genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-    # Use modelo mais avançado para análises
-    GEMINI_MODEL = 'gemini-1.5-pro'  # Mudança para modelo mais avançado
+    from services.deepseek_client import DeepSeekClient
+    deepseek_client = DeepSeekClient()
+    logger.info("✅ Cliente DeepSeek configurado com sucesso")
 except Exception as e:
-    print(f"Erro ao configurar Gemini AI: {e}")
+    logger.error(f"❌ Erro ao inicializar DeepSeek: {e}")
 
+@analysis_bp.route('/analyze', methods=['POST'])
+def analyze_market():
 # Configure Supabase
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
