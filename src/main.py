@@ -53,8 +53,9 @@ if database_url:
         
         with app.app_context():
             try:
-                # Teste de conexão simples
-                result = db.engine.execute('SELECT 1')
+                # Teste de conexão usando sintaxe correta do SQLAlchemy 2.x
+                from sqlalchemy import text
+                result = db.session.execute(text('SELECT 1'))
                 logger.info("✅ Conexão com Supabase estabelecida com sucesso!")
             except Exception as e:
                 logger.warning(f"⚠️ Erro na conexão com banco de dados: {e}")
