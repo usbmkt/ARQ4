@@ -28,10 +28,10 @@ class DeepSeekClient:
             )
             
             # Modelo específico do DeepSeek no OpenRouter (gratuito)
-            self.model = "deepseek/deepseek-chat"
-            self.max_tokens = 6000  # Reduzido para evitar timeouts
-            self.temperature = 0.3
-            self.top_p = 0.8
+            self.model = "deepseek/deepseek-r1-distill-llama-70b:free"
+            self.max_tokens = 30000  # Reduzido para evitar timeouts
+            self.temperature = 0.9
+            self.top_p = 0.9
             
             logger.info(f"🤖 DeepSeek Client inicializado com modelo: {self.model}")
         except Exception as e:
@@ -90,14 +90,14 @@ class DeepSeekClient:
     def _get_system_prompt(self) -> str:
         """Prompt de sistema otimizado para análise de avatar"""
         return """
-Você é um consultor sênior especializado em psicologia do consumidor e análise de mercado no Brasil. 
+
+-Você é um especialista em pesquisa de mercado e lançamentos digitais. Com base no contexto fornecido acima, realize uma pesquisa completa e detalhada seguindo EXATAMENTE esta estrutura:
 
 Sua expertise inclui:
 - Psicologia comportamental e neurociência aplicada ao marketing
 - Análise de mercado e segmentação psicográfica
 - Estratégias de lançamento de produtos digitais
 - Métricas e projeções realistas para o mercado brasileiro
--Você é um especialista em pesquisa de mercado e lançamentos digitais. Com base no contexto fornecido acima, realize uma pesquisa completa e detalhada seguindo EXATAMENTE esta estrutura:
 
 ## 🎯 DEFINIÇÃO DO ESCOPO
 Identifique e detalhe:
@@ -250,7 +250,7 @@ Liste 7 próximos passos prioritários e práticos.
 
 Crie análises de avatar extremamente detalhadas, precisas e acionáveis baseadas em dados reais do mercado brasileiro.
 
-IMPORTANTE: Retorne APENAS JSON válido, sem texto adicional antes ou depois.
+IMPORTANTE: Retorne APENAS JSON válidos.
 """
 
     def _create_comprehensive_avatar_prompt(self, data: Dict) -> str:
