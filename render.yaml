@@ -1,15 +1,16 @@
 services:
   - type: web
-    name: arqueologia-avatar-app
+    name: arqueologia-avatar-deepseek
     runtime: python
     plan: free
     branch: main
+    rootDir: .
     buildCommand: |
       pip install --upgrade pip &&
       pip install -r requirements.txt
     startCommand: |
       cd src && 
-      gunicorn main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
+      gunicorn main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --preload
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -17,8 +18,8 @@ services:
         value: production
       - key: CORS_ORIGINS
         value: "*"
-      # Todas as chaves abaixo devem ser cadastradas como 'secrets' no painel do Render
-      - key: GEMINI_API_KEY
+      # Chaves que devem ser cadastradas como 'secrets' no painel do Render
+      - key: DEEPSEEK_API_KEY
         fromSecret: true
       - key: SUPABASE_URL
         fromSecret: true

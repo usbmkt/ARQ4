@@ -1,4 +1,4 @@
-/* Neomorphic 3D Dashboard Styles */
+/* Neomorphic 3D Dashboard Styles - Enhanced for DeepSeek */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
 
@@ -617,7 +617,8 @@ body {
 }
 
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.form-group select {
     width: 100%;
     padding: 0.8rem 1rem;
     border: none;
@@ -632,7 +633,8 @@ body {
 }
 
 .form-group input:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.form-group select:focus {
     box-shadow: var(--neo-shadow-pressed);
 }
 
@@ -779,6 +781,325 @@ body {
     gap: 2rem;
 }
 
+/* Results Specific Styles */
+.results-header {
+    margin-bottom: 2rem;
+}
+
+.results-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 2rem;
+}
+
+.result-card.full-width {
+    grid-column: 1 / -1;
+}
+
+/* Detail Items */
+.detail-item {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--neo-bg-dark);
+    border-radius: var(--neo-border-radius-small);
+}
+
+.detail-item strong {
+    color: var(--brand-primary);
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.detail-item ul {
+    margin-left: 1rem;
+    color: var(--text-secondary);
+}
+
+.detail-item blockquote {
+    background: var(--neo-bg-light);
+    padding: 1rem;
+    border-radius: var(--neo-border-radius-small);
+    border-left: 4px solid var(--brand-primary);
+    font-style: italic;
+    margin: 0.5rem 0;
+}
+
+/* Avatar Sections */
+.avatar-profile {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.avatar-section h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--brand-primary);
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--brand-primary);
+    padding-bottom: 0.5rem;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+/* Dores Section */
+.dores-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.dor-item {
+    background: var(--neo-bg-light);
+    padding: 1rem;
+    border-radius: var(--neo-border-radius-small);
+    border-left: 4px solid var(--brand-accent);
+}
+
+.dor-item h5 {
+    color: var(--brand-accent);
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+/* Competitor Items */
+.competitor-item {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--neo-bg-light);
+    border-radius: var(--neo-border-radius-small);
+    border-left: 4px solid var(--brand-secondary);
+}
+
+.competitor-item h5 {
+    color: var(--brand-secondary);
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+/* Metrics Grid */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.metric-item {
+    text-align: center;
+    padding: 1.5rem;
+    background: var(--neo-bg-dark);
+    border-radius: var(--neo-border-radius-small);
+    box-shadow: var(--neo-shadow-inset);
+}
+
+.metric-value {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--brand-primary);
+    margin-bottom: 0.5rem;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Keywords Table */
+.keywords-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.keyword-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    gap: 1rem;
+    padding: 0.8rem;
+    background: var(--neo-bg-light);
+    border-radius: var(--neo-border-radius-small);
+    align-items: center;
+}
+
+.keyword {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.difficulty.alta {
+    color: var(--brand-accent);
+}
+
+.difficulty.media {
+    color: var(--brand-secondary);
+}
+
+.difficulty.baixa {
+    color: #10b981;
+}
+
+/* Platform Costs */
+.platform-costs {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.platform-item {
+    padding: 1rem;
+    background: var(--neo-bg-light);
+    border-radius: var(--neo-border-radius-small);
+}
+
+.platform-item h5 {
+    color: var(--brand-primary);
+    margin-bottom: 0.5rem;
+    text-transform: capitalize;
+}
+
+/* ROI Channels */
+.roi-channels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.roi-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: var(--neo-bg-light);
+    border-radius: var(--neo-border-radius-small);
+}
+
+.channel {
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: capitalize;
+}
+
+.roi {
+    font-weight: 700;
+    color: var(--brand-primary);
+}
+
+/* Funnel Steps */
+.funnel-steps {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.funnel-step {
+    padding: 0.5rem 1rem;
+    background: var(--brand-gradient);
+    color: var(--text-light);
+    border-radius: var(--neo-border-radius-small);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+/* Objeção Items */
+.objecao-item {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--neo-bg-light);
+    border-radius: var(--neo-border-radius-small);
+    border-left: 4px solid var(--brand-primary);
+}
+
+.objecao-item h5 {
+    color: var(--brand-primary);
+    margin-bottom: 0.5rem;
+}
+
+/* Scenarios Grid */
+.scenarios-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.scenario-item {
+    padding: 1.5rem;
+    border-radius: var(--neo-border-radius-small);
+    text-align: center;
+}
+
+.scenario-item.conservador {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
+    border: 2px solid rgba(239, 68, 68, 0.3);
+}
+
+.scenario-item.realista {
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(247, 147, 30, 0.1));
+    border: 2px solid rgba(255, 107, 53, 0.3);
+}
+
+.scenario-item.otimista {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+    border: 2px solid rgba(16, 185, 129, 0.3);
+}
+
+.scenario-item h4 {
+    margin-bottom: 1rem;
+    font-weight: 700;
+}
+
+/* Action Timeline */
+.action-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.action-item {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.action-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--brand-gradient);
+    color: var(--text-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.action-content {
+    flex: 1;
+    background: var(--neo-bg-dark);
+    padding: 1.5rem;
+    border-radius: var(--neo-border-radius-small);
+}
+
+.action-content h4 {
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
 /* Responsive Design */
 @media (max-width: 1200px) {
     .neo-analyzer-container {
@@ -828,6 +1149,31 @@ body {
     .neo-hero-stats {
         grid-template-columns: repeat(3, 1fr);
     }
+    
+    .results-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .results-actions {
+        flex-direction: column;
+    }
+    
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .keyword-row {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+    
+    .scenarios-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 480px) {
@@ -843,5 +1189,29 @@ body {
         flex-direction: column;
         width: 100%;
     }
+    
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
+/* Additional utility classes */
+.text-center {
+    text-align: center;
+}
+
+.mb-2 {
+    margin-bottom: 1rem;
+}
+
+.mb-3 {
+    margin-bottom: 1.5rem;
+}
+
+.mt-2 {
+    margin-top: 1rem;
+}
+
+.mt-3 {
+    margin-top: 1.5rem;
+}
