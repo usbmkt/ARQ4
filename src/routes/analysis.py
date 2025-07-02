@@ -11,6 +11,10 @@ from typing import Dict, List, Optional, Tuple
 import concurrent.futures
 from functools import lru_cache
 
+# Configure logging PRIMEIRO
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 analysis_bp = Blueprint('analysis', __name__)
 
 # Configure Supabase com suas variáveis exatas
@@ -24,10 +28,6 @@ if supabase_url and supabase_key:
         logger.info("✅ Cliente Supabase configurado com sucesso")
     except Exception as e:
         logger.error(f"❌ Erro ao configurar Supabase: {e}")
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Initialize DeepSeek client
 try:
