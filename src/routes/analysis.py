@@ -46,7 +46,7 @@ def analyze_market():
         if not data or not data.get('nicho'):
             return jsonify({'error': 'Nicho é obrigatório'}), 400
         
-        # Extract and validate form data
+        # Extract and validate form data with safe conversion
         analysis_data = {
             'nicho': data.get('nicho', '').strip(),
             'produto': data.get('produto', '').strip(),
@@ -60,15 +60,19 @@ def analyze_market():
             'orcamento_marketing': data.get('orcamentoMarketing', '')
         }
         
-        # Validate and convert numeric fields
-        try:
-            analysis_data['preco_float'] = float(analysis_data['preco']) if analysis_data['preco'] else None
-            analysis_data['objetivo_receita_float'] = float(analysis_data['objetivo_receita']) if analysis_data['objetivo_receita'] else None
-            analysis_data['orcamento_marketing_float'] = float(analysis_data['orcamento_marketing']) if analysis_data['orcamento_marketing'] else None
-        except ValueError:
-            analysis_data['preco_float'] = None
-            analysis_data['objetivo_receita_float'] = None
-            analysis_data['orcamento_marketing_float'] = None
+        # Validate and convert numeric fields with safe handling
+        def safe_float_conversion(value, default=None):
+            """Converte valor para float de forma segura"""
+            if value is None or value == '':
+                return default
+            try:
+                return float(str(value).replace(',', '.'))
+            except (ValueError, TypeError):
+                return default
+        
+        analysis_data['preco_float'] = safe_float_conversion(analysis_data['preco'], 997.0)
+        analysis_data['objetivo_receita_float'] = safe_float_conversion(analysis_data['objetivo_receita'], 100000.0)
+        analysis_data['orcamento_marketing_float'] = safe_float_conversion(analysis_data['orcamento_marketing'], 50000.0)
         
         logger.info(f"🔍 Iniciando análise para nicho: {analysis_data['nicho']}")
         
@@ -152,11 +156,16 @@ def update_analysis_record(analysis_id: int, results: Dict):
 
 def create_fallback_analysis(data: Dict) -> Dict:
     """Cria análise de fallback detalhada quando a IA falha"""
-    nicho = data.get('nicho', '')
+    nicho = data.get('nicho', 'Produto Digital')
     produto = data.get('produto', 'Produto Digital')
-    preco = data.get('preco_float', 997)
     
-    logger.info(f"🔄 Criando análise de fallback para {nicho}")
+    # Garantir que preco seja um número válido
+    try:
+        preco = float(data.get('preco_float', 0)) if data.get('preco_float') is not None else 997.0
+    except (ValueError, TypeError):
+        preco = 997.0
+    
+    logger.info(f"🔄 Criando análise de fallback para {nicho} - Preço: R$ {preco}")
     
     return {
         "escopo": {
@@ -257,7 +266,9 @@ def create_fallback_analysis(data: Dict) -> Dict:
             ],
             "custos_plataforma": {
                 "facebook": {"cpm": "R$ 18", "cpc": "R$ 1,45", "cpl": "R$ 28", "conversao": "2,8%"},
-                "google": {"cpm": "R$ 32", "cpc": "R$ 3,20", "cpl": "R$ 52", "conversao": "3,5%"}
+                "google": {"cpm": "R$ 32", "cpc": "R$ 3,20", "cpl": "R$ 52", "conversao": "3,5%"},
+                "youtube": {"cpm": "R$ 12", "cpc": "R$ 0,80", "cpl": "R$ 20", "conversao": "1,8%"},
+                "tiktok": {"cpm": "R$ 8", "cpc": "R$ 0,60", "cpl": "R$ 18", "conversao": "1,5%"}
             }
         },
         "metricas": {
@@ -267,7 +278,9 @@ def create_fallback_analysis(data: Dict) -> Dict:
             "ltv_cac_ratio": "4,0:1",
             "roi_canais": {
                 "facebook": "320%",
-                "google": "380%"
+                "google": "380%",
+                "youtube": "250%",
+                "tiktok": "180%"
             }
         },
         "voz_mercado": {
