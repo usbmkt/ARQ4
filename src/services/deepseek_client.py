@@ -16,24 +16,35 @@ class DeepSeekClient:
         self.api_key = os.getenv('DEEPSEEK_API_KEY')
         
         if not self.api_key:
-            raise ValueError("DEEPSEEK_API_KEY não encontrada nas variáveis de ambiente")
+            logger.warning("⚠️ DEEPSEEK_API_KEY não encontrada - usando análise de fallback")
+            self.client = None
+            return
         
-        # Configurar cliente OpenAI para usar OpenRouter
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url="https://openrouter.ai/api/v1"
-        )
-        
-        # Modelo específico do DeepSeek no OpenRouter (gratuito)
-        self.model = "deepseek/deepseek-chat"
-        self.max_tokens = 6000  # Reduzido para evitar timeouts
-        self.temperature = 0.3
-        self.top_p = 0.8
-        
-        logger.info(f"🤖 DeepSeek Client inicializado com modelo: {self.model}")
+        try:
+            # Configurar cliente OpenAI para usar OpenRouter
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url="https://openrouter.ai/api/v1"
+            )
+            
+            # Modelo específico do DeepSeek no OpenRouter (gratuito)
+            self.model = "deepseek/deepseek-chat"
+            self.max_tokens = 6000  # Reduzido para evitar timeouts
+            self.temperature = 0.3
+            self.top_p = 0.8
+            
+            logger.info(f"🤖 DeepSeek Client inicializado com modelo: {self.model}")
+        except Exception as e:
+            logger.error(f"❌ Erro ao inicializar cliente DeepSeek: {e}")
+            self.client = None
         
     def analyze_avatar_comprehensive(self, data: Dict) -> Dict:
         """Análise ultra-detalhada do avatar com DeepSeek via OpenRouter"""
+        
+        # Se não há cliente configurado, usar fallback
+        if not self.client:
+            logger.info("🔄 Cliente DeepSeek não disponível, usando análise de fallback")
+            return self._create_fallback_analysis(data)
         
         prompt = self._create_comprehensive_avatar_prompt(data)
         
@@ -310,11 +321,27 @@ INSTRUÇÕES CRÍTICAS:
 
     def _create_fallback_analysis(self, data: Dict) -> Dict:
         """Cria análise de fallback detalhada quando a IA falha"""
-        nicho = data.get('nicho', '')
+        nicho = data.get('nicho', 'Produto Digital')
         produto = data.get('produto', 'Produto Digital')
-        preco = data.get('preco_float', 997)
         
-        logger.info(f"🔄 Criando análise de fallback para {nicho}")
+        # Garantir que preco seja um número válido
+        try:
+            preco = float(data.get('preco_float', 0)) if data.get('preco_float') is not None else 997.0
+        except (ValueError, TypeError):
+            preco = 997.0
+        
+        # Garantir que outros valores numéricos sejam válidos
+        try:
+            objetivo_receita = float(data.get('objetivo_receita_float', 0)) if data.get('objetivo_receita_float') is not None else 100000.0
+        except (ValueError, TypeError):
+            objetivo_receita = 100000.0
+            
+        try:
+            orcamento_marketing = float(data.get('orcamento_marketing_float', 0)) if data.get('orcamento_marketing_float') is not None else 50000.0
+        except (ValueError, TypeError):
+            orcamento_marketing = 50000.0
+        
+        logger.info(f"🔄 Criando análise de fallback para {nicho} - Preço: R$ {preco}")
         
         return {
             "escopo": {
