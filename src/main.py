@@ -38,15 +38,15 @@ if database_url:
             'pool_pre_ping': True,
             'pool_recycle': 300,
             'pool_timeout': 60,
-            'pool_size': 3,
-            'max_overflow': 5,
+            'pool_size': 5, # Aumentado para 5
+            'max_overflow': 10, # Aumentado para 10
             'connect_args': {
                 'sslmode': 'require',
                 'connect_timeout': 60,
                 'application_name': 'ARQV2_DeepSeek_App',
                 'keepalives_idle': 600,
                 'keepalives_interval': 30,
-                'keepalives_count': 3
+                'keepalives_count': 5 # Aumentado para 5
             }
         }
         
@@ -59,11 +59,11 @@ if database_url:
                 result = db.session.execute(text('SELECT 1'))
                 logger.info("✅ Conexão com Supabase estabelecida com sucesso!")
             except Exception as e:
-                logger.warning(f"⚠️ Conexão com banco não disponível no momento: {str(e)[:100]}...")
+                logger.warning(f"⚠️ Conexão com banco não disponível no momento: {e}")
                 logger.info("📱 Aplicação funcionará com funcionalidades limitadas")
                 
     except Exception as e:
-        logger.warning(f"⚠️ Erro na configuração do banco de dados: {str(e)[:100]}...")
+        logger.error(f"❌ Erro fatal na configuração do banco de dados: {e}")
         logger.info("📱 Aplicação funcionará sem persistência de dados")
 else:
     logger.warning("📋 DATABASE_URL não encontrada. Executando sem funcionalidades de banco de dados.")
@@ -84,7 +84,8 @@ def health_check():
                 from sqlalchemy import text
                 db.session.execute(text('SELECT 1'))
                 db_connection = 'connected'
-        except:
+        except Exception as e:
+            logger.error(f"Erro no health check do banco de dados: {e}")
             db_connection = 'error'
     
     return jsonify({
