@@ -18,16 +18,16 @@ services:
         value: production
       - key: CORS_ORIGINS
         value: "*"
-      # Chaves que devem ser cadastradas como 'secrets' no painel do Render
+      # Suas variáveis do Supabase
       - key: DEEPSEEK_API_KEY
-        value: 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
+        fromSecret: true
       - key: SUPABASE_URL
-        value: https://albyamqjdopihijsderu.supabase.co
+        fromSecret: true
       - key: SUPABASE_ANON_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsYnlhbXFqZG9waWhpanNkZXJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0MTgzMTYsImV4cCI6MjA2Njk5NDMxNn0.n0fjjyDF7LZYa6MD2ZZ5tUVjEieNDtb_rbvfjNHS_Rg
+        fromSecret: true
       - key: SUPABASE_SERVICE_ROLE_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsYnlhbXFqZG9waWhpanNkZXJ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTQxODMxNiwiZXhwIjoyMDY2OTk0MzE2fQ.muvh9Xxvb2e30d4fwiO8m2cL5x5KI5-VHO0bNd9F4hg
+        fromSecret: true
       - key: DATABASE_URL
-        value: postgresql://postgres:9pfVX8TLcxXubcVv@db.albyamqjdopihijsderu.supabase.co:5432/postgres
+        fromSecret: true
       - key: SECRET_KEY
-        value: FDGD851F8DGhgfhgf_fdsfewn543534==//ddfsehjkj$#@
+        fromSecret: true

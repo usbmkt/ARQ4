@@ -12,7 +12,7 @@ class DeepSeekClient:
     """Cliente avançado para DeepSeek via OpenRouter com análise ultra-detalhada"""
     
     def __init__(self):
-        # Usar a chave correta do OpenRouter
+        # Usar a chave do OpenRouter
         self.api_key = os.getenv('DEEPSEEK_API_KEY')
         
         if not self.api_key:
@@ -26,9 +26,11 @@ class DeepSeekClient:
         
         # Modelo específico do DeepSeek no OpenRouter (gratuito)
         self.model = "deepseek/deepseek-chat"
-        self.max_tokens = 8000  # Reduzido para evitar timeouts
+        self.max_tokens = 6000  # Reduzido para evitar timeouts
         self.temperature = 0.3
         self.top_p = 0.8
+        
+        logger.info(f"🤖 DeepSeek Client inicializado com modelo: {self.model}")
         
     def analyze_avatar_comprehensive(self, data: Dict) -> Dict:
         """Análise ultra-detalhada do avatar com DeepSeek via OpenRouter"""
@@ -36,7 +38,7 @@ class DeepSeekClient:
         prompt = self._create_comprehensive_avatar_prompt(data)
         
         try:
-            logger.info("Iniciando análise com DeepSeek...")
+            logger.info("🔍 Iniciando análise com DeepSeek...")
             
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -57,20 +59,20 @@ class DeepSeekClient:
             )
             
             content = response.choices[0].message.content
-            logger.info(f"Resposta DeepSeek recebida: {len(content)} caracteres")
+            logger.info(f"✅ Resposta DeepSeek recebida: {len(content)} caracteres")
             
             # Extrai e valida JSON
             analysis = self._extract_and_validate_json(content)
             
             if not analysis:
-                logger.warning("Falha ao extrair JSON, usando fallback")
+                logger.warning("⚠️ Falha ao extrair JSON, usando fallback")
                 return self._create_fallback_analysis(data)
             
-            logger.info("Análise DeepSeek concluída com sucesso")
+            logger.info("🎉 Análise DeepSeek concluída com sucesso")
             return analysis
             
         except Exception as e:
-            logger.error(f"Erro na análise DeepSeek: {str(e)}")
+            logger.error(f"❌ Erro na análise DeepSeek: {str(e)}")
             # Retorna análise de fallback em caso de erro
             return self._create_fallback_analysis(data)
     
@@ -97,114 +99,120 @@ IMPORTANTE: Retorne APENAS JSON válido, sem texto adicional antes ou depois.
         produto = data.get('produto', '')
         preco = data.get('preco', '')
         publico = data.get('publico', '')
+        objetivo_receita = data.get('objetivo_receita', '')
+        orcamento_marketing = data.get('orcamento_marketing', '')
         
         return f"""
-Analise o seguinte produto/serviço e crie uma análise ultra-detalhada do avatar ideal:
+Analise o seguinte produto/serviço e crie uma análise ultra-detalhada do avatar ideal para o mercado brasileiro:
 
-DADOS:
+DADOS DO PRODUTO:
 - Nicho: {nicho}
 - Produto: {produto}
 - Preço: R$ {preco}
 - Público: {publico}
+- Objetivo de Receita: R$ {objetivo_receita}
+- Orçamento Marketing: R$ {orcamento_marketing}
 
-Retorne APENAS um JSON válido com esta estrutura:
+Retorne APENAS um JSON válido com esta estrutura exata:
 
 {{
   "escopo": {{
     "nicho_principal": "{nicho}",
-    "subnichos": ["Subniche 1", "Subniche 2", "Subniche 3"],
-    "produto_ideal": "Nome do produto ideal",
-    "proposta_valor": "Proposta de valor única"
+    "subnichos": ["Subniche específico 1", "Subniche específico 2", "Subniche específico 3"],
+    "produto_ideal": "Nome do produto ideal baseado no nicho",
+    "proposta_valor": "Proposta de valor única e específica"
   }},
   "avatar": {{
     "demografia": {{
-      "faixa_etaria": "Faixa específica",
-      "genero": "Distribuição por gênero",
-      "localizacao": "Principais regiões do Brasil",
-      "renda": "Faixa de renda em R$",
-      "escolaridade": "Nível educacional",
-      "profissoes": ["Profissão 1", "Profissão 2", "Profissão 3"]
+      "faixa_etaria": "Faixa específica em anos",
+      "genero": "Distribuição percentual por gênero",
+      "localizacao": "Principais regiões do Brasil com percentuais",
+      "renda": "Faixa de renda mensal em R$",
+      "escolaridade": "Nível educacional predominante",
+      "profissoes": ["Profissão específica 1", "Profissão específica 2", "Profissão específica 3"]
     }},
     "psicografia": {{
-      "valores": ["Valor 1", "Valor 2", "Valor 3"],
-      "estilo_vida": "Descrição do estilo de vida",
-      "aspiracoes": ["Aspiração 1", "Aspiração 2"],
-      "medos": ["Medo 1", "Medo 2", "Medo 3"],
-      "frustracoes": ["Frustração 1", "Frustração 2"]
+      "valores": ["Valor específico 1", "Valor específico 2", "Valor específico 3"],
+      "estilo_vida": "Descrição detalhada do estilo de vida",
+      "aspiracoes": ["Aspiração específica 1", "Aspiração específica 2"],
+      "medos": ["Medo específico 1", "Medo específico 2", "Medo específico 3"],
+      "frustracoes": ["Frustração específica 1", "Frustração específica 2"]
     }},
     "comportamento_digital": {{
-      "plataformas": ["Plataforma 1", "Plataforma 2"],
-      "horarios_pico": "Horários específicos",
-      "conteudo_preferido": ["Tipo 1", "Tipo 2", "Tipo 3"],
-      "influenciadores": ["Tipo 1", "Tipo 2"]
+      "plataformas": ["Plataforma principal 1", "Plataforma principal 2"],
+      "horarios_pico": "Horários específicos de maior atividade",
+      "conteudo_preferido": ["Tipo de conteúdo 1", "Tipo de conteúdo 2", "Tipo de conteúdo 3"],
+      "influenciadores": ["Tipo de influenciador 1", "Tipo de influenciador 2"]
     }}
   }},
   "dores_desejos": {{
     "principais_dores": [
       {{
-        "descricao": "Dor específica 1",
-        "impacto": "Como impacta a vida",
+        "descricao": "Dor específica e detalhada 1",
+        "impacto": "Como esta dor impacta a vida da pessoa",
         "urgencia": "Alta"
       }},
       {{
-        "descricao": "Dor específica 2",
-        "impacto": "Como impacta a vida",
+        "descricao": "Dor específica e detalhada 2", 
+        "impacto": "Como esta dor impacta a vida da pessoa",
         "urgencia": "Média"
       }},
       {{
-        "descricao": "Dor específica 3",
-        "impacta": "Como impacta a vida",
+        "descricao": "Dor específica e detalhada 3",
+        "impacto": "Como esta dor impacta a vida da pessoa",
         "urgencia": "Baixa"
       }}
     ],
-    "estado_atual": "Estado atual detalhado",
-    "estado_desejado": "Estado desejado detalhado",
-    "obstaculos": ["Obstáculo 1", "Obstáculo 2"],
-    "sonho_secreto": "Sonho não verbalizado"
+    "estado_atual": "Descrição detalhada do estado atual do avatar",
+    "estado_desejado": "Descrição detalhada do estado desejado",
+    "obstaculos": ["Obstáculo específico 1", "Obstáculo específico 2"],
+    "sonho_secreto": "O sonho mais profundo que o avatar não verbaliza"
   }},
   "concorrencia": {{
     "diretos": [
       {{
-        "nome": "Concorrente 1",
-        "preco": "R$ X.XXX",
-        "usp": "Proposta única",
-        "forcas": ["Força 1", "Força 2"],
-        "fraquezas": ["Fraqueza 1", "Fraqueza 2"]
+        "nome": "Nome real ou realista do concorrente",
+        "preco": "Faixa de preço em R$",
+        "usp": "Proposta única específica",
+        "forcas": ["Força específica 1", "Força específica 2"],
+        "fraquezas": ["Fraqueza específica 1", "Fraqueza específica 2"]
       }}
     ],
     "indiretos": [
       {{
-        "nome": "Concorrente Indireto 1",
-        "tipo": "Tipo de solução"
+        "nome": "Concorrente indireto específico",
+        "tipo": "Tipo de solução alternativa"
       }}
     ],
-    "gaps_mercado": ["Gap 1", "Gap 2", "Gap 3"]
+    "gaps_mercado": ["Gap específico 1", "Gap específico 2", "Gap específico 3"]
   }},
   "mercado": {{
-    "tam": "R$ X bilhões",
-    "sam": "R$ X milhões",
-    "som": "R$ X milhões",
-    "volume_busca": "X.XXX buscas/mês",
-    "tendencias_alta": ["Tendência 1", "Tendência 2"],
-    "tendencias_baixa": ["Tendência 1"],
+    "tam": "Valor em R$ bilhões",
+    "sam": "Valor em R$ milhões", 
+    "som": "Valor em R$ milhões",
+    "volume_busca": "Número de buscas mensais",
+    "tendencias_alta": ["Tendência em alta 1", "Tendência em alta 2"],
+    "tendencias_baixa": ["Tendência em baixa 1"],
     "sazonalidade": {{
-      "melhores_meses": ["Janeiro", "Março"],
-      "piores_meses": ["Dezembro"]
+      "melhores_meses": ["Mês 1", "Mês 2"],
+      "piores_meses": ["Mês 1"]
     }}
   }},
   "palavras_chave": {{
     "principais": [
       {{
-        "termo": "palavra-chave 1",
-        "volume": "X.XXX",
-        "cpc": "R$ X,XX",
-        "dificuldade": "Média",
-        "intencao": "Comercial"
+        "termo": "palavra-chave específica",
+        "volume": "Volume mensal",
+        "cpc": "CPC em R$",
+        "dificuldade": "Alta/Média/Baixa",
+        "intencao": "Comercial/Informacional"
       }}
     ],
     "custos_plataforma": {{
       "facebook": {{"cpm": "R$ XX", "cpc": "R$ X,XX", "cpl": "R$ XX", "conversao": "X,X%"}},
-      "google": {{"cpm": "R$ XX", "cpc": "R$ X,XX", "cpl": "R$ XX", "conversao": "X,X%"}}
+      "google": {{"cpm": "R$ XX", "cpc": "R$ X,XX", "cpl": "R$ XX", "conversao": "X,X%"}},
+      "youtube": {{"cpm": "R$ XX", "cpc": "R$ X,XX", "cpl": "R$ XX", "conversao": "X,X%"}},
+      "tiktok": {{"cpm": "R$ XX", "cpc": "R$ X,XX", "cpl": "R$ XX", "conversao": "X,X%"}}
     }}
   }},
   "metricas": {{
@@ -214,22 +222,24 @@ Retorne APENAS um JSON válido com esta estrutura:
     "ltv_cac_ratio": "X,X:1",
     "roi_canais": {{
       "facebook": "XXX%",
-      "google": "XXX%"
+      "google": "XXX%",
+      "youtube": "XXX%",
+      "tiktok": "XXX%"
     }}
   }},
   "voz_mercado": {{
     "objecoes": [
       {{
-        "objecao": "Objeção 1",
-        "contorno": "Como contornar"
+        "objecao": "Objeção específica comum",
+        "contorno": "Como contornar esta objeção"
       }}
     ],
     "linguagem": {{
-      "termos": ["Termo 1", "Termo 2"],
-      "girias": ["Gíria 1"],
-      "gatilhos": ["Gatilho 1", "Gatilho 2"]
+      "termos": ["Termo técnico 1", "Termo técnico 2"],
+      "girias": ["Gíria do nicho 1"],
+      "gatilhos": ["Gatilho mental 1", "Gatilho mental 2"]
     }},
-    "crencas_limitantes": ["Crença 1", "Crença 2"]
+    "crencas_limitantes": ["Crença limitante 1", "Crença limitante 2"]
   }},
   "projecoes": {{
     "conservador": {{
@@ -238,7 +248,7 @@ Retorne APENAS um JSON válido com esta estrutura:
       "roi": "XXX%"
     }},
     "realista": {{
-      "conversao": "X,X%",
+      "conversao": "X,X%", 
       "faturamento": "R$ XXX.XXX",
       "roi": "XXX%"
     }},
@@ -251,18 +261,23 @@ Retorne APENAS um JSON válido com esta estrutura:
   "plano_acao": [
     {{
       "passo": 1,
-      "acao": "Ação específica 1",
+      "acao": "Ação específica e prática 1",
       "prazo": "X semanas"
     }},
     {{
       "passo": 2,
-      "acao": "Ação específica 2",
+      "acao": "Ação específica e prática 2", 
       "prazo": "X semanas"
     }}
   ]
 }}
 
-Use dados realistas do mercado brasileiro. Substitua todos os placeholders por valores específicos.
+INSTRUÇÕES CRÍTICAS:
+- Use dados realistas e específicos do mercado brasileiro
+- Substitua TODOS os placeholders (XXX, X.XXX, etc.) por valores numéricos reais
+- Seja extremamente específico e detalhado
+- Base as projeções no preço e orçamento informados
+- Foque em insights acionáveis e práticos
 """
 
     def _extract_and_validate_json(self, content: str) -> Optional[Dict]:
@@ -277,16 +292,20 @@ Use dados realistas do mercado brasileiro. Substitua todos os placeholders por v
             
             if start_idx != -1 and end_idx != -1:
                 json_str = content[start_idx:end_idx + 1]
-                return json.loads(json_str)
+                parsed_json = json.loads(json_str)
+                logger.info("✅ JSON extraído e validado com sucesso")
+                return parsed_json
             
             # Tenta parsear o conteúdo inteiro
-            return json.loads(content)
+            parsed_json = json.loads(content)
+            logger.info("✅ JSON parseado diretamente com sucesso")
+            return parsed_json
             
         except json.JSONDecodeError as e:
-            logger.error(f"Erro ao parsear JSON: {e}")
+            logger.error(f"❌ Erro ao parsear JSON: {e}")
             return None
         except Exception as e:
-            logger.error(f"Erro inesperado ao extrair JSON: {e}")
+            logger.error(f"❌ Erro inesperado ao extrair JSON: {e}")
             return None
 
     def _create_fallback_analysis(self, data: Dict) -> Dict:
@@ -294,6 +313,8 @@ Use dados realistas do mercado brasileiro. Substitua todos os placeholders por v
         nicho = data.get('nicho', '')
         produto = data.get('produto', 'Produto Digital')
         preco = data.get('preco_float', 997)
+        
+        logger.info(f"🔄 Criando análise de fallback para {nicho}")
         
         return {
             "escopo": {
@@ -394,7 +415,9 @@ Use dados realistas do mercado brasileiro. Substitua todos os placeholders por v
                 ],
                 "custos_plataforma": {
                     "facebook": {"cpm": "R$ 18", "cpc": "R$ 1,45", "cpl": "R$ 28", "conversao": "2,8%"},
-                    "google": {"cpm": "R$ 32", "cpc": "R$ 3,20", "cpl": "R$ 52", "conversao": "3,5%"}
+                    "google": {"cpm": "R$ 32", "cpc": "R$ 3,20", "cpl": "R$ 52", "conversao": "3,5%"},
+                    "youtube": {"cpm": "R$ 12", "cpc": "R$ 0,80", "cpl": "R$ 20", "conversao": "1,8%"},
+                    "tiktok": {"cpm": "R$ 8", "cpc": "R$ 0,60", "cpl": "R$ 18", "conversao": "1,5%"}
                 }
             },
             "metricas": {
@@ -404,7 +427,9 @@ Use dados realistas do mercado brasileiro. Substitua todos os placeholders por v
                 "ltv_cac_ratio": "4,0:1",
                 "roi_canais": {
                     "facebook": "320%",
-                    "google": "380%"
+                    "google": "380%",
+                    "youtube": "250%",
+                    "tiktok": "180%"
                 }
             },
             "voz_mercado": {
@@ -442,40 +467,12 @@ Use dados realistas do mercado brasileiro. Substitua todos os placeholders por v
                 }
             },
             "plano_acao": [
-                {
-                    "passo": 1,
-                    "acao": "Validar proposta de valor com pesquisa qualitativa (50 entrevistas)",
-                    "prazo": "2 semanas"
-                },
-                {
-                    "passo": 2,
-                    "acao": "Criar landing page otimizada com copy baseado na pesquisa",
-                    "prazo": "1 semana"
-                },
-                {
-                    "passo": 3,
-                    "acao": "Configurar campanhas de tráfego pago (Facebook e Google)",
-                    "prazo": "1 semana"
-                },
-                {
-                    "passo": 4,
-                    "acao": "Produzir conteúdo de aquecimento (webinar + sequência de e-mails)",
-                    "prazo": "2 semanas"
-                },
-                {
-                    "passo": 5,
-                    "acao": "Executar campanha de pré-lançamento com early bird",
-                    "prazo": "1 semana"
-                },
-                {
-                    "passo": 6,
-                    "acao": "Lançamento oficial com live de abertura",
-                    "prazo": "1 semana"
-                },
-                {
-                    "passo": 7,
-                    "acao": "Otimizar campanhas baseado em dados e escalar investimento",
-                    "prazo": "Contínuo"
-                }
+                {"passo": 1, "acao": "Validar proposta de valor com pesquisa qualitativa (50 entrevistas)", "prazo": "2 semanas"},
+                {"passo": 2, "acao": "Criar landing page otimizada com copy baseado na pesquisa", "prazo": "1 semana"},
+                {"passo": 3, "acao": "Configurar campanhas de tráfego pago (Facebook e Google)", "prazo": "1 semana"},
+                {"passo": 4, "acao": "Produzir conteúdo de aquecimento (webinar + sequência de e-mails)", "prazo": "2 semanas"},
+                {"passo": 5, "acao": "Executar campanha de pré-lançamento com early bird", "prazo": "1 semana"},
+                {"passo": 6, "acao": "Lançamento oficial com live de abertura", "prazo": "1 semana"},
+                {"passo": 7, "acao": "Otimizar campanhas baseado em dados e escalar investimento", "prazo": "Contínuo"}
             ]
         }
