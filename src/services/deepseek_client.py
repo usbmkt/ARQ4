@@ -1,19 +1,125 @@
 import os
 import json
 import logging
-from typing import Dict, List, Optional, Any
-from openai import OpenAI
+import requests
 import time
 import re
+from typing import Dict, List, Optional, Any
+from openai import OpenAI
+from bs4 import BeautifulSoup
+from urllib.parse import quote_plus
+import concurrent.futures
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+class WebSearcher:
+    """Classe para pesquisa na internet com múltiplas fontes"""
+    
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        })
+    
+    def search_google(self, query: str, num_results: int = 5) -> List[Dict]:
+        """Pesquisa no Google usando scraping"""
+        try:
+            encoded_query = quote_plus(query)
+            url = f"https://www.google.com/search?q={encoded_query}&num={num_results}"
+            
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            results = []
+            
+            # Extrair resultados de pesquisa
+            search_results = soup.find_all('div', class_='g')
+            
+            for result in search_results[:num_results]:
+                try:
+                    title_elem = result.find('h3')
+                    link_elem = result.find('a')
+                    snippet_elem = result.find('span', class_=['aCOpRe', 'st'])
+                    
+                    if title_elem and link_elem:
+                        title = title_elem.get_text()
+                        link = link_elem.get('href', '')
+                        snippet = snippet_elem.get_text() if snippet_elem else ''
+                        
+                        if link.startswith('/url?q='):
+                            link = link.split('/url?q=')[1].split('&')[0]
+                        
+                        results.append({
+                            'title': title,
+                            'url': link,
+                            'snippet': snippet
+                        })
+                except Exception as e:
+                    logger.warning(f"Erro ao processar resultado: {e}")
+                    continue
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Erro na pesquisa Google: {e}")
+            return []
+    
+    def search_market_data(self, nicho: str) -> Dict:
+        """Pesquisa dados específicos de mercado"""
+        try:
+            queries = [
+                f"mercado {nicho} Brasil 2024 tamanho",
+                f"{nicho} tendências mercado brasileiro",
+                f"concorrentes {nicho} Brasil principais",
+                f"preços {nicho} cursos online Brasil",
+                f"{nicho} público alvo perfil demográfico"
+            ]
+            
+            market_data = {
+                'market_size': [],
+                'trends': [],
+                'competitors': [],
+                'pricing': [],
+                'demographics': []
+            }
+            
+            for i, query in enumerate(queries):
+                results = self.search_google(query, 3)
+                key = list(market_data.keys())[i]
+                market_data[key] = results
+                time.sleep(1)  # Rate limiting
+            
+            return market_data
+            
+        except Exception as e:
+            logger.error(f"Erro na pesquisa de dados de mercado: {e}")
+            return {}
+    
+    def get_competitor_info(self, competitor_name: str, nicho: str) -> Dict:
+        """Obtém informações específicas sobre um concorrente"""
+        try:
+            query = f"{competitor_name} {nicho} preço curso online"
+            results = self.search_google(query, 3)
+            
+            return {
+                'name': competitor_name,
+                'search_results': results,
+                'last_updated': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro ao buscar info do concorrente {competitor_name}: {e}")
+            return {}
+
 class DeepSeekClient:
-    """Cliente avançado para DeepSeek via OpenRouter com análise ultra-detalhada"""
+    """Cliente avançado para DeepSeek com pesquisa na internet e análise ultra-detalhada"""
     
     def __init__(self):
         # Usar a chave do OpenRouter
         self.api_key = os.getenv('DEEPSEEK_API_KEY')
+        self.web_searcher = WebSearcher()
         
         if not self.api_key:
             logger.warning("⚠️ DEEPSEEK_API_KEY não encontrada - usando análise de fallback")
@@ -27,30 +133,95 @@ class DeepSeekClient:
                 base_url="https://openrouter.ai/api/v1"
             )
             
-            # Modelo específico do DeepSeek no OpenRouter (gratuito)
-            self.model = "deepseek/deepseek-chat"
-            self.max_tokens = 6000  # Reduzido para evitar timeouts
-            self.temperature = 0.3
-            self.top_p = 0.8
+            # Modelo específico do DeepSeek no OpenRouter
+            self.model = "deepseek/deepseek-r1-distill-llama-70b"
+            self.max_tokens = 32000
+            self.temperature = 0.7
+            self.top_p = 0.9
             
             logger.info(f"🤖 DeepSeek Client inicializado com modelo: {self.model}")
         except Exception as e:
             logger.error(f"❌ Erro ao inicializar cliente DeepSeek: {e}")
             self.client = None
-        
+    
     def analyze_avatar_comprehensive(self, data: Dict) -> Dict:
-        """Análise ultra-detalhada do avatar com DeepSeek via OpenRouter"""
+        """Análise ultra-detalhada do avatar com pesquisa na internet"""
         
-        # Se não há cliente configurado, usar fallback
         if not self.client:
             logger.info("🔄 Cliente DeepSeek não disponível, usando análise de fallback")
             return self._create_fallback_analysis(data)
         
-        prompt = self._create_comprehensive_avatar_prompt(data)
+        try:
+            # 1. Pesquisar dados de mercado na internet
+            logger.info("🔍 Pesquisando dados de mercado na internet...")
+            market_research = self._conduct_market_research(data)
+            
+            # 2. Gerar análise com IA usando dados pesquisados
+            logger.info("🧠 Gerando análise com DeepSeek AI...")
+            analysis = self._generate_ai_analysis(data, market_research)
+            
+            # 3. Enriquecer com dados adicionais
+            logger.info("📊 Enriquecendo análise com dados adicionais...")
+            enriched_analysis = self._enrich_analysis(analysis, market_research)
+            
+            logger.info("🎉 Análise DeepSeek concluída com sucesso")
+            return enriched_analysis
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na análise DeepSeek: {str(e)}")
+            return self._create_fallback_analysis(data)
+    
+    def _conduct_market_research(self, data: Dict) -> Dict:
+        """Conduz pesquisa de mercado na internet"""
+        nicho = data.get('nicho', '')
+        concorrentes = data.get('concorrentes', '')
+        
+        research_data = {
+            'market_data': {},
+            'competitor_data': [],
+            'trend_data': {},
+            'pricing_data': {},
+            'search_timestamp': datetime.now().isoformat()
+        }
         
         try:
-            logger.info("🔍 Iniciando análise com DeepSeek...")
+            # Pesquisa paralela para eficiência
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                # Pesquisa dados gerais de mercado
+                future_market = executor.submit(self.web_searcher.search_market_data, nicho)
+                
+                # Pesquisa concorrentes específicos
+                competitor_futures = []
+                if concorrentes:
+                    competitor_list = [c.strip() for c in concorrentes.split(',') if c.strip()]
+                    for competitor in competitor_list[:3]:  # Limitar a 3 concorrentes
+                        future = executor.submit(self.web_searcher.get_competitor_info, competitor, nicho)
+                        competitor_futures.append(future)
+                
+                # Coletar resultados
+                research_data['market_data'] = future_market.result()
+                
+                for future in competitor_futures:
+                    try:
+                        competitor_info = future.result()
+                        if competitor_info:
+                            research_data['competitor_data'].append(competitor_info)
+                    except Exception as e:
+                        logger.warning(f"Erro ao obter dados de concorrente: {e}")
             
+            logger.info(f"✅ Pesquisa de mercado concluída: {len(research_data['competitor_data'])} concorrentes analisados")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na pesquisa de mercado: {e}")
+        
+        return research_data
+    
+    def _generate_ai_analysis(self, data: Dict, research: Dict) -> Dict:
+        """Gera análise usando IA com dados de pesquisa"""
+        
+        prompt = self._create_enhanced_analysis_prompt(data, research)
+        
+        try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -72,157 +243,58 @@ class DeepSeekClient:
             content = response.choices[0].message.content
             logger.info(f"✅ Resposta DeepSeek recebida: {len(content)} caracteres")
             
-            # Extrai e valida JSON
+            # Parse da resposta JSON
             analysis = self._extract_and_validate_json(content)
             
             if not analysis:
                 logger.warning("⚠️ Falha ao extrair JSON, usando fallback")
                 return self._create_fallback_analysis(data)
             
-            logger.info("🎉 Análise DeepSeek concluída com sucesso")
             return analysis
             
         except Exception as e:
-            logger.error(f"❌ Erro na análise DeepSeek: {str(e)}")
-            # Retorna análise de fallback em caso de erro
+            logger.error(f"❌ Erro ao gerar análise com IA: {str(e)}")
             return self._create_fallback_analysis(data)
     
     def _get_system_prompt(self) -> str:
         """Prompt de sistema otimizado para análise de avatar"""
         return """
-Você é um consultor sênior especializado em psicologia do consumidor e análise de mercado no Brasil. 
+Você é um especialista mundial em pesquisa de mercado, neurociência aplicada ao marketing e lançamentos de produtos digitais. 
 
 Sua expertise inclui:
-- Psicologia comportamental e neurociência aplicada ao marketing
-- Análise de mercado e segmentação psicográfica
-- Estratégias de lançamento de produtos digitais
+- Psicologia comportamental e neurociência do consumidor
+- Análise de mercado e segmentação psicográfica avançada
+- Estratégias de lançamento de produtos digitais de alto ticket
 - Métricas e projeções realistas para o mercado brasileiro
-## IDENTIDADE DO AGENTE
-Você é o **MESTRE DA PERSUASÃO VISCERAL**. Sua linguagem é **DIRETA**, **BRUTALMENTE HONESTA**, e carregada de **TENSÃO PSICOLÓGICA**. Você não tem medo de chocar, confrontar ou usar metáforas sombrias para expor a verdade. Seu objetivo é **FORÇAR CLAREZA** e **AÇÃO IMEDIATA**.
+- Análise competitiva e posicionamento estratégico
+- Funis de conversão e otimização de campanhas
 
-## TAREFA PRINCIPAL
-Realizar uma "Engenharia Reversa Psicológica Profunda" a partir dos dados de pesquisa fornecidos pelo usuário. Vá **MUITO ALÉM** dos dados demográficos superficiais. Mergulhe nas **DORES MAIS PROFUNDAS** e **INCONFESSÁVEIS** dos leads, nos seus **DESEJOS MAIS ARDENTES** e **SECRETOS**, nos seus **MEDOS PARALISANTES**, nas suas **FRUSTRAÇÕES DIÁRIAS**, nas suas **OBJEÇÕES MAIS CÍNICAS**, na **LINGUAGEM QUE ELES REALMENTE USAM** (não a que o usuário acha que eles usam) e nos seus **SONHOS MAIS SELVAGENS**. O objetivo é criar um dossiê tão preciso que o usuário sinta que pode **LER A MENTE** dos seus leads.
+INSTRUÇÕES CRÍTICAS:
+1. Use SEMPRE dados reais e específicos do mercado brasileiro
+2. Base suas análises em pesquisas e dados fornecidos
+3. Seja extremamente detalhado e específico
+4. Foque em insights acionáveis e práticos
+5. Use números realistas baseados em benchmarks do mercado
+6. Retorne APENAS JSON válido, sem texto adicional
 
-## OBJETIVO DESTA ENGENHARIA REVERSA
-Construir um perfil psicológico ultra-detalhado dos leads que permita ao usuário:
-
-* Criar ofertas e produtos que os leads sintam que foram feitos **SOB MEDIDA** para seus problemas e desejos mais íntimos.
-* Escrever copy e conteúdo que fale **DIRETAMENTE À ALMA** dos leads, usando suas próprias palavras, metáforas e dores.
-* **ANTECIPAR** e **NEUTRALIZAR** objeções antes mesmo que sejam verbalizadas.
-* Posicionar a marca e as soluções do usuário como a **ÚNICA ESCOLHA** lógica e emocional.
-* Saber **EXATAMENTE ONDE ENCONTRÁ-LOS** e como atrair sua atenção em meio ao ruído.
-
-## DADOS NECESSÁRIOS DA PESQUISA DE LEADS
-Peça ao usuário para fornecer:
-
-* Planilha/documento com as respostas da pesquisa de leads
-* Produto/Serviço Principal para o qual a pesquisa foi realizada
-* Principais perguntas feitas na pesquisa
-* Número de respostas coletadas
-* Informações demográficas disponíveis (opcional)
-
-## INSTRUÇÕES DETALHADAS PARA A EXECUÇÃO
-
-### Análise Inicial dos Dados Brutos:
-
-* Identifique padrões recorrentes nas respostas
-* Detecte linguagem emocional e expressões repetidas
-* Observe contradições entre o que dizem e o que realmente querem
-
-### Desconstrução da Persona Superficial (O Raio-X da Alma):
-
-* **Dores Secretas e Inconfessáveis**: (Medo do fracasso, inadequação, inveja, solidão)
-* **Desejos Ardentes e Proibidos**: (Poder, status, vingança, ser desejado, vida fácil)
-* **Medos Paralisantes e Irracionais**: (Julgamento, perda, desconhecido, não ser bom o suficiente)
-* **Frustrações Diárias (As Pequenas Mortes)**: (Procrastinação, falta de clareza, interrupções, ferramentas complicadas)
-
-### Análise Aprofundada:
-* **Mapeamento da Linguagem Interna e Externa**: Extraia as **PALAVRAS E FRASES EXATAS** usadas, suas **METÁFORAS**, e as **FONTES DE INFORMAÇÃO** confiáveis (e odiadas).
-* **Identificação das Objeções Reais** (Não as Educadas): Quais as **VERDADEIRAS** razões para NÃO comprar? (Desconfiança, preguiça, medo da mudança, auto-sabotagem)
-* **O "Dia Perfeito" e o "Pior Pesadelo" dos Leads**: Construa esses dois cenários a partir das respostas.
-* **Segmentação Psicológica Avançada**: Identifique subgrupos com motivações diferentes entre os respondentes.
-
-## FORMATO DA SAÍDA ESPERADA
-
-### DOSSIÊ CONFIDENCIAL: [NOME SUGESTIVO PARA O PERFIL DE LEAD]
-
-#### PERFIL PSICOLÓGICO PROFUNDO:
-
-* **Nome Fictício**: (Para humanizar o perfil)
-* **Idade Aproximada**: (Baseado nos dados demográficos)
-* **Ocupação/Situação de Vida**: (Extraído das respostas)
-* **Resumo da Jornada de Dor**: "Ele(a) acorda todos os dias sentindo..."
-
-#### AS FERIDAS ABERTAS (DORES SECRETAS E INCONFESSÁVEIS):
-
-[Dor Profunda #1]: "No fundo, ele(a) teme desesperadamente..."
-
-#### OS SONHOS PROIBIDOS (DESEJOS ARDENTES E SECRETOS):
-
-[Desejo Secreto #1]: "Mais do que tudo, ele(a) anseia por..."
-
-#### OS DEMÔNIOS INTERNOS (MEDOS PARALISANTES E IRRACIONAIS):
-
-[Medo Paralisante #1]: "O pensamento de [Situação Temida] o(a) congela porque..."
-
-#### AS CORRENTES DO COTIDIANO (FRUSTRAÇÕES DIÁRIAS):
-
-* "No seu dia a dia, ele(a) luta constantemente com..."
-* "As pequenas coisas que o(a) tiram do sério são..."
-
-#### O DIALETO DA ALMA (LINGUAGEM INTERNA E EXTERNA):
-
-* **Frases Típicas Sobre Suas Dores**: (Extraídas diretamente das respostas)
-* **Frases Típicas Sobre Seus Desejos**: (Extraídas diretamente das respostas)
-* **Metáforas Comuns**: (Identificadas nas respostas)
-* **Influenciadores/Fontes de Confiança e Desprezadas**: (Mencionados nas respostas)
-
-#### AS MURALHAS DA DESCONFIANÇA (OBJEÇÕES REAIS E CÍNICAS):
-
-* "Isso parece bom demais para ser verdade porque... (objeção real: desconfiança)"
-* "..."
-* "..."
-* (Listar 3-4 objeções extraídas das respostas da pesquisa)
-
-#### VISÕES DO PARAÍSO E DO INFERNO:
-
-* **O Dia Perfeito** (Pós-Transformação): [Narrativa baseada nas aspirações reveladas]
-* **O Pesadelo Recorrente** (Sem a Solução): [Narrativa baseada nos medos revelados]
-
-#### COMO USAR ESTE DOSSIÊ (Implicações para Marketing e Vendas):
-
-* **Ângulos de Copy Mais Poderoso**: (Baseado nas dores/desejos predominantes)
-* **Tipos de Conteúdo que Mais Atrai**: (Baseado nas preferências reveladas)
-* **Melhor Tom de Voz para Usar**: (Baseado na linguagem dos leads)
-* **Principais Gatilhos Emocionais a Serem Ativados**: (Baseado nos padrões identificados)
-
-#### SEGMENTAÇÃO PSICOLÓGICA:
-
-* **Segmento 1**: [Nome do Segmento] (Características distintas)
-* **Segmento 2**: [Nome do Segmento] (Características distintas)
-* **Segmento 3**: [Nome do Segmento] (Características distintas)
-
-### PRÓXIMO PASSO RECOMENDADO:
-
-"Agora que você conhece a alma dos seus leads, o próximo passo é [Sugestão de ação ou prompt subsequente]. Pronto para transformar esse conhecimento em poder de venda?"
-
-Crie análises de avatar extremamente detalhadas, precisas e acionáveis baseadas em dados reais do mercado brasileiro.
-
-IMPORTANTE: Retorne APENAS JSON válido, sem texto adicional antes ou depois.
+Crie análises de avatar extremamente detalhadas, precisas e acionáveis.
 """
 
-    def _create_comprehensive_avatar_prompt(self, data: Dict) -> str:
-        """Cria prompt ultra-detalhado para análise de avatar"""
+    def _create_enhanced_analysis_prompt(self, data: Dict, research: Dict) -> str:
+        """Cria prompt aprimorado com dados de pesquisa"""
         
         nicho = data.get('nicho', '')
         produto = data.get('produto', '')
         preco = data.get('preco', '')
         publico = data.get('publico', '')
-        objetivo_receita = data.get('objetivo_receita', '')
-        orcamento_marketing = data.get('orcamento_marketing', '')
+        objetivo_receita = data.get('objetivoReceita', '')
+        orcamento_marketing = data.get('orcamentoMarketing', '')
+        
+        # Processar dados de pesquisa
+        market_insights = self._process_research_data(research)
         
         return f"""
-Analise o seguinte produto/serviço e crie uma análise ultra-detalhada do avatar ideal para o mercado brasileiro:
+Analise o seguinte produto/serviço e crie uma análise ultra-detalhada do avatar ideal para o mercado brasileiro.
 
 DADOS DO PRODUTO:
 - Nicho: {nicho}
@@ -232,6 +304,9 @@ DADOS DO PRODUTO:
 - Objetivo de Receita: R$ {objetivo_receita}
 - Orçamento Marketing: R$ {orcamento_marketing}
 
+DADOS DE PESQUISA DE MERCADO:
+{market_insights}
+
 Retorne APENAS um JSON válido com esta estrutura exata:
 
 {{
@@ -239,7 +314,7 @@ Retorne APENAS um JSON válido com esta estrutura exata:
     "nicho_principal": "{nicho}",
     "subnichos": ["Subniche específico 1", "Subniche específico 2", "Subniche específico 3"],
     "produto_ideal": "Nome do produto ideal baseado no nicho",
-    "proposta_valor": "Proposta de valor única e específica"
+    "proposta_valor": "Proposta de valor única e específica baseada na pesquisa"
   }},
   "avatar": {{
     "demografia": {{
@@ -290,8 +365,8 @@ Retorne APENAS um JSON válido com esta estrutura exata:
   "concorrencia": {{
     "diretos": [
       {{
-        "nome": "Nome real ou realista do concorrente",
-        "preco": "Faixa de preço em R$",
+        "nome": "Nome real do concorrente baseado na pesquisa",
+        "preco": "Faixa de preço em R$ baseada na pesquisa",
         "usp": "Proposta única específica",
         "forcas": ["Força específica 1", "Força específica 2"],
         "fraquezas": ["Fraqueza específica 1", "Fraqueza específica 2"]
@@ -303,15 +378,15 @@ Retorne APENAS um JSON válido com esta estrutura exata:
         "tipo": "Tipo de solução alternativa"
       }}
     ],
-    "gaps_mercado": ["Gap específico 1", "Gap específico 2", "Gap específico 3"]
+    "gaps_mercado": ["Gap específico 1 baseado na pesquisa", "Gap específico 2", "Gap específico 3"]
   }},
   "mercado": {{
-    "tam": "Valor em R$ bilhões",
-    "sam": "Valor em R$ milhões", 
-    "som": "Valor em R$ milhões",
-    "volume_busca": "Número de buscas mensais",
-    "tendencias_alta": ["Tendência em alta 1", "Tendência em alta 2"],
-    "tendencias_baixa": ["Tendência em baixa 1"],
+    "tam": "Valor em R$ bilhões baseado na pesquisa",
+    "sam": "Valor em R$ milhões baseado na pesquisa", 
+    "som": "Valor em R$ milhões baseado na pesquisa",
+    "volume_busca": "Número de buscas mensais baseado na pesquisa",
+    "tendencias_alta": ["Tendência em alta 1 da pesquisa", "Tendência em alta 2"],
+    "tendencias_baixa": ["Tendência em baixa 1 da pesquisa"],
     "sazonalidade": {{
       "melhores_meses": ["Mês 1", "Mês 2"],
       "piores_meses": ["Mês 1"]
@@ -320,9 +395,9 @@ Retorne APENAS um JSON válido com esta estrutura exata:
   "palavras_chave": {{
     "principais": [
       {{
-        "termo": "palavra-chave específica",
-        "volume": "Volume mensal",
-        "cpc": "CPC em R$",
+        "termo": "palavra-chave específica baseada na pesquisa",
+        "volume": "Volume mensal estimado",
+        "cpc": "CPC em R$ estimado",
         "dificuldade": "Alta/Média/Baixa",
         "intencao": "Comercial/Informacional"
       }}
@@ -335,9 +410,9 @@ Retorne APENAS um JSON válido com esta estrutura exata:
     }}
   }},
   "metricas": {{
-    "cac_medio": "R$ XXX",
+    "cac_medio": "R$ XXX baseado no orçamento e nicho",
     "funil_conversao": ["100% visitantes", "XX% leads", "X% vendas"],
-    "ltv_medio": "R$ X.XXX",
+    "ltv_medio": "R$ X.XXX baseado no preço e retenção",
     "ltv_cac_ratio": "X,X:1",
     "roi_canais": {{
       "facebook": "XXX%",
@@ -349,7 +424,7 @@ Retorne APENAS um JSON válido com esta estrutura exata:
   "voz_mercado": {{
     "objecoes": [
       {{
-        "objecao": "Objeção específica comum",
+        "objecao": "Objeção específica comum baseada na pesquisa",
         "contorno": "Como contornar esta objeção"
       }}
     ],
@@ -363,42 +438,100 @@ Retorne APENAS um JSON válido com esta estrutura exata:
   "projecoes": {{
     "conservador": {{
       "conversao": "X,X%",
-      "faturamento": "R$ XX.XXX",
+      "faturamento": "R$ XX.XXX baseado no orçamento",
       "roi": "XXX%"
     }},
     "realista": {{
       "conversao": "X,X%", 
-      "faturamento": "R$ XXX.XXX",
+      "faturamento": "R$ XXX.XXX baseado no orçamento",
       "roi": "XXX%"
     }},
     "otimista": {{
       "conversao": "X,X%",
-      "faturamento": "R$ X.XXX.XXX",
+      "faturamento": "R$ X.XXX.XXX baseado no orçamento",
       "roi": "XXX%"
     }}
   }},
   "plano_acao": [
     {{
       "passo": 1,
-      "acao": "Ação específica e prática 1",
+      "acao": "Ação específica e prática 1 baseada na análise",
       "prazo": "X semanas"
     }},
     {{
       "passo": 2,
-      "acao": "Ação específica e prática 2", 
+      "acao": "Ação específica e prática 2 baseada na análise", 
       "prazo": "X semanas"
     }}
-  ]
+  ],
+  "insights_pesquisa": {{
+    "dados_mercado": "Principais insights da pesquisa de mercado",
+    "concorrentes_encontrados": "Concorrentes identificados na pesquisa",
+    "tendencias_identificadas": "Tendências identificadas na pesquisa",
+    "oportunidades_unicas": "Oportunidades únicas identificadas"
+  }}
 }}
 
 INSTRUÇÕES CRÍTICAS:
-- Use dados realistas e específicos do mercado brasileiro
+- Use EXCLUSIVAMENTE dados da pesquisa fornecida quando disponível
 - Substitua TODOS os placeholders (XXX, X.XXX, etc.) por valores numéricos reais
+- Base as projeções no preço ({preco}) e orçamento ({orcamento_marketing}) informados
 - Seja extremamente específico e detalhado
-- Base as projeções no preço e orçamento informados
-- Foque em insights acionáveis e práticos
+- Foque em insights acionáveis baseados na pesquisa real
 """
 
+    def _process_research_data(self, research: Dict) -> str:
+        """Processa dados de pesquisa para incluir no prompt"""
+        if not research or not research.get('market_data'):
+            return "Nenhum dado de pesquisa disponível."
+        
+        insights = []
+        
+        # Processar dados de mercado
+        market_data = research.get('market_data', {})
+        for category, results in market_data.items():
+            if results:
+                insights.append(f"\n{category.upper()}:")
+                for result in results[:2]:  # Limitar a 2 resultados por categoria
+                    insights.append(f"- {result.get('title', '')}: {result.get('snippet', '')}")
+        
+        # Processar dados de concorrentes
+        competitor_data = research.get('competitor_data', [])
+        if competitor_data:
+            insights.append("\nCONCORRENTES IDENTIFICADOS:")
+            for competitor in competitor_data:
+                insights.append(f"- {competitor.get('name', '')}")
+                for result in competitor.get('search_results', [])[:1]:
+                    insights.append(f"  * {result.get('snippet', '')}")
+        
+        return '\n'.join(insights) if insights else "Dados de pesquisa limitados disponíveis."
+    
+    def _enrich_analysis(self, analysis: Dict, research: Dict) -> Dict:
+        """Enriquece a análise com dados adicionais da pesquisa"""
+        try:
+            # Adicionar metadados da pesquisa
+            analysis['research_metadata'] = {
+                'search_timestamp': research.get('search_timestamp'),
+                'sources_consulted': len(research.get('market_data', {})),
+                'competitors_analyzed': len(research.get('competitor_data', [])),
+                'data_quality': 'high' if research.get('market_data') else 'limited'
+            }
+            
+            # Adicionar insights específicos da pesquisa
+            if 'insights_pesquisa' not in analysis:
+                analysis['insights_pesquisa'] = {
+                    'dados_mercado': 'Análise baseada em pesquisa de mercado atualizada',
+                    'concorrentes_encontrados': ', '.join([c.get('name', '') for c in research.get('competitor_data', [])]),
+                    'tendencias_identificadas': 'Tendências identificadas através de pesquisa online',
+                    'oportunidades_unicas': 'Oportunidades baseadas em gaps identificados na pesquisa'
+                }
+            
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"Erro ao enriquecer análise: {e}")
+            return analysis
+    
     def _extract_and_validate_json(self, content: str) -> Optional[Dict]:
         """Extrai e valida JSON da resposta"""
         try:
@@ -434,18 +567,18 @@ INSTRUÇÕES CRÍTICAS:
         
         # Garantir que preco seja um número válido
         try:
-            preco = float(data.get('preco_float', 0)) if data.get('preco_float') is not None else 997.0
+            preco = float(data.get('preco', 0)) if data.get('preco') else 997.0
         except (ValueError, TypeError):
             preco = 997.0
         
         # Garantir que outros valores numéricos sejam válidos
         try:
-            objetivo_receita = float(data.get('objetivo_receita_float', 0)) if data.get('objetivo_receita_float') is not None else 100000.0
+            objetivo_receita = float(data.get('objetivoReceita', 0)) if data.get('objetivoReceita') else 100000.0
         except (ValueError, TypeError):
             objetivo_receita = 100000.0
             
         try:
-            orcamento_marketing = float(data.get('orcamento_marketing_float', 0)) if data.get('orcamento_marketing_float') is not None else 50000.0
+            orcamento_marketing = float(data.get('orcamentoMarketing', 0)) if data.get('orcamentoMarketing') else 50000.0
         except (ValueError, TypeError):
             orcamento_marketing = 50000.0
         
@@ -556,9 +689,9 @@ INSTRUÇÕES CRÍTICAS:
                 }
             },
             "metricas": {
-                "cac_medio": "R$ 420",
+                "cac_medio": f"R$ {int(orcamento_marketing * 0.01):,}".replace(',', '.'),
                 "funil_conversao": ["100% visitantes", "18% leads", "3,2% vendas"],
-                "ltv_medio": "R$ 1.680",
+                "ltv_medio": f"R$ {int(preco * 1.8):,}".replace(',', '.'),
                 "ltv_cac_ratio": "4,0:1",
                 "roi_canais": {
                     "facebook": "320%",
@@ -587,17 +720,17 @@ INSTRUÇÕES CRÍTICAS:
             "projecoes": {
                 "conservador": {
                     "conversao": "2,0%",
-                    "faturamento": f"R$ {int(preco * 200):,}".replace(',', '.'),
+                    "faturamento": f"R$ {int(objetivo_receita * 0.6):,}".replace(',', '.'),
                     "roi": "240%"
                 },
                 "realista": {
                     "conversao": "3,2%",
-                    "faturamento": f"R$ {int(preco * 320):,}".replace(',', '.'),
+                    "faturamento": f"R$ {int(objetivo_receita):,}".replace(',', '.'),
                     "roi": "380%"
                 },
                 "otimista": {
                     "conversao": "5,0%",
-                    "faturamento": f"R$ {int(preco * 500):,}".replace(',', '.'),
+                    "faturamento": f"R$ {int(objetivo_receita * 1.5):,}".replace(',', '.'),
                     "roi": "580%"
                 }
             },
@@ -609,5 +742,17 @@ INSTRUÇÕES CRÍTICAS:
                 {"passo": 5, "acao": "Executar campanha de pré-lançamento com early bird", "prazo": "1 semana"},
                 {"passo": 6, "acao": "Lançamento oficial com live de abertura", "prazo": "1 semana"},
                 {"passo": 7, "acao": "Otimizar campanhas baseado em dados e escalar investimento", "prazo": "Contínuo"}
-            ]
+            ],
+            "insights_pesquisa": {
+                "dados_mercado": "Análise baseada em dados de mercado consolidados e benchmarks da indústria",
+                "concorrentes_encontrados": "Principais players identificados através de análise competitiva",
+                "tendencias_identificadas": "Tendências emergentes no mercado brasileiro",
+                "oportunidades_unicas": "Gaps de mercado identificados para diferenciação estratégica"
+            },
+            "research_metadata": {
+                "search_timestamp": datetime.now().isoformat(),
+                "sources_consulted": 0,
+                "competitors_analyzed": 0,
+                "data_quality": "fallback"
+            }
         }
