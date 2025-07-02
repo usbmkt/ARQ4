@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: arqueologia-avatar-app
+    runtime: python
+    plan: free
+    branch: main
+    buildCommand: |
+      pip install --upgrade pip &&
+      pip install -r requirements.txt
+    startCommand: |
+      cd src && 
+      gunicorn main:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: FLASK_ENV
+        value: production
+      - key: CORS_ORIGINS
+        value: "*"
+      # Todas as chaves abaixo devem ser cadastradas como 'secrets' no painel do Render
+      - key: GEMINI_API_KEY
+        fromSecret: true
+      - key: SUPABASE_URL
+        fromSecret: true
+      - key: SUPABASE_ANON_KEY
+        fromSecret: true
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        fromSecret: true
+      - key: DATABASE_URL
+        fromSecret: true
+      - key: SECRET_KEY
+        fromSecret: true
