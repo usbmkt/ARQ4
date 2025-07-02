@@ -29,8 +29,8 @@ class DeepSeekClient:
             
             # Modelo específico do DeepSeek no OpenRouter (gratuito)
             self.model = "deepseek/deepseek-chat"
-            self.max_tokens = 6000  # Reduzido para evitar timeouts
-            self.temperature = 0.3
+            self.max_tokens = 20000  # Reduzido para evitar timeouts
+            self.temperature = 0.7
             self.top_p = 0.8
             
             logger.info(f"🤖 DeepSeek Client inicializado com modelo: {self.model}")
