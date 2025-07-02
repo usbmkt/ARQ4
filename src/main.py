@@ -27,46 +27,42 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'a-default-secret-key-that-sh
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(analysis_bp, url_prefix='/api')
 
-# Configuração do banco de dados usando suas variáveis
+# Configuração do banco de dados
 database_url = os.getenv('DATABASE_URL')
 if database_url:
     try:
-        # Configuração otimizada para Supabase
         app.config['SQLALCHEMY_DATABASE_URI'] = database_url
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
             'pool_pre_ping': True,
             'pool_recycle': 300,
-            'pool_timeout': 60,
-            'pool_size': 5, # Aumentado para 5
-            'max_overflow': 10, # Aumentado para 10
+            'pool_timeout': 30,
+            'pool_size': 5,
+            'max_overflow': 10,
             'connect_args': {
                 'sslmode': 'require',
-                'connect_timeout': 60,
-                'application_name': 'ARQV2_DeepSeek_App',
-                'keepalives_idle': 600,
-                'keepalives_interval': 30,
-                'keepalives_count': 5 # Aumentado para 5
+                'connect_timeout': 30,
+                'application_name': 'ARQV2_DeepSeek_App'
             }
         }
         
         db.init_app(app)
         
-        # Teste de conexão opcional - não bloqueia a aplicação
         with app.app_context():
             try:
+                # Teste de conexão simples usando text() para compatibilidade
                 from sqlalchemy import text
                 result = db.session.execute(text('SELECT 1'))
                 logger.info("✅ Conexão com Supabase estabelecida com sucesso!")
             except Exception as e:
-                logger.warning(f"⚠️ Conexão com banco não disponível no momento: {e}")
-                logger.info("📱 Aplicação funcionará com funcionalidades limitadas")
+                logger.warning(f"⚠️ Erro na conexão com banco de dados: {e}")
+                logger.info("Aplicação funcionará sem persistência de dados")
                 
     except Exception as e:
-        logger.error(f"❌ Erro fatal na configuração do banco de dados: {e}")
-        logger.info("📱 Aplicação funcionará sem persistência de dados")
+        logger.error(f"❌ Erro na configuração do banco de dados: {e}")
+        logger.info("Aplicação funcionará sem persistência de dados")
 else:
-    logger.warning("📋 DATABASE_URL não encontrada. Executando sem funcionalidades de banco de dados.")
+    logger.warning("DATABASE_URL não encontrada. Executando sem funcionalidades de banco de dados.")
 
 # Rota de health check
 @app.route('/health')
@@ -76,28 +72,16 @@ def health_check():
     supabase_status = 'configured' if os.getenv('SUPABASE_URL') else 'not_configured'
     database_status = 'configured' if database_url else 'not_configured'
     
-    # Teste rápido de conexão com banco
-    db_connection = 'disconnected'
-    if database_url:
-        try:
-            with app.app_context():
-                from sqlalchemy import text
-                db.session.execute(text('SELECT 1'))
-                db_connection = 'connected'
-        except Exception as e:
-            logger.error(f"Erro no health check do banco de dados: {e}")
-            db_connection = 'error'
-    
     return jsonify({
         'status': 'healthy',
         'message': 'UP Lançamentos - Arqueologia do Avatar com DeepSeek AI',
         'services': {
             'deepseek_ai': deepseek_status,
             'supabase': supabase_status,
-            'database': database_status,
-            'db_connection': db_connection
+            'database': database_status
         },
-        'version': '2.0.0'
+        'version': '2.0.0',
+        'environment': os.getenv('FLASK_ENV', 'development')
     })
 
 # Rota para servir arquivos estáticos e SPA
